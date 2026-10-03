@@ -178,7 +178,11 @@ function LongCard({ app }: { app: App }) {
   const [years, setYears] = useState(10);
   const rate = Number(family.rate);
   const plan = monthlyPlan(app);
-  const per = plan.long + (plan.match || 0);
+  const isKid = sel.role === "kid";
+  const exYou = family.long_min;
+  const exMatch = matchOf(family, "kid", exYou);
+  const per = isKid ? exYou + exMatch : plan.long + (plan.match || 0);
+  const actual = plan.long + (plan.match || 0);
   return (
     <section className="card">
       <div className="card-h"><h2>長期罐：定期投資</h2>{rate > 0 && <span className="pill active">家庭銀行月息 {rate}%</span>}</div>
@@ -186,10 +190,11 @@ function LongCard({ app }: { app: App }) {
         <>
           <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期定額買股票，只進不出。</p>
           <div className="grid3 center">
-            <div><div className="note">你放</div><b className="num">{fmt(plan.long)}</b></div>
-            <div><div className="note">{gd(family)}配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(plan.match || 0)}</b></div>
+            <div><div className="note">你放</div><b className="num">{fmt(exYou)}</b></div>
+            <div><div className="note">{gd(family)}配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(exMatch)}</b></div>
             <div><div className="note">每月投資</div><b className="num">{fmt(per)}</b></div>
           </div>
+          {actual !== per && <p className="note">這個月實際是：你放 {fmt(plan.long)}，{gd(family)}配對 {fmt(plan.match || 0)}，一共投資 {fmt(actual)}。</p>}
         </>
       ) : (
         <p className="small">長期罐的錢只進不出，每月定期投資。</p>
@@ -248,7 +253,7 @@ export function GrowthChart({ start, monthly, years }: { start: number; monthly:
           <text x={L - 6} y={Y(v) + 3} textAnchor="end">{short(v)}</text>
         </g>
       ))}
-      {xs.map((y) => <text key={y} x={X(y)} y={H - 8} textAnchor="middle">{y === 0 ? "現在" : `${y} 年後`}</text>)}
+      {xs.map((y, i) => <text key={y} x={X(y)} y={H - 8} textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}>{y === 0 ? "現在" : `${y} 年後`}</text>)}
       <path d={path(grow) + ` L${X(years)} ${Y(0)} L${X(0)} ${Y(0)} Z`} fill="var(--long)" fillOpacity=".12" />
       <path d={path(plain)} fill="none" stroke="var(--muted)" strokeWidth="2" strokeDasharray="4 4" />
       <path d={path(grow)} fill="none" stroke="var(--long)" strokeWidth="2.5" />

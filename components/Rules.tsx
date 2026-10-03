@@ -1,6 +1,6 @@
 "use client";
 import type { App } from "./Shell";
-import { fmt, stepBonus, gd } from "@/lib/util";
+import { fmt, stepBonus, gd, matchOf } from "@/lib/util";
 
 export default function Rules({ app }: { app: App }) {
   const { family } = app;
@@ -51,7 +51,8 @@ export default function Rules({ app }: { app: App }) {
             <h3 className="k-long">長期罐：定期投資，留給未來的自己</h3>
             <ul className="plain">
               <li>每月至少放 {fmt(family.long_min)} 進長期罐。</li>
-              <li><b>{gd(family)}配對</b>：你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。放 {fmt(family.long_min)}，{gd(family)}加 {fmt(Math.round(family.long_min * family.match_pct / 100))}；放 {fmt(1000)}，{gd(family)}加 {fmt(Math.round(1000 * family.match_pct / 100))}。</li>
+              <li><b>{gd(family)}配對</b>：你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。</li>
+              <li>舉例：你放 {fmt(family.long_min)}，{gd(family)}配對 {fmt(matchOf(family, "kid", family.long_min))}，每月投資 {fmt(family.long_min + matchOf(family, "kid", family.long_min))}。</li>
               <li>兩邊加起來的錢，每月定期定額買股票，是未來的第一桶金。</li>
               <li>長期罐的錢只進不出，股票會有漲有跌，時間拉長才看得出複利的力量。</li>
               {Number(family.rate) > 0 && <li>家庭銀行另外每月發 {Number(family.rate)}% 利息。</li>}
