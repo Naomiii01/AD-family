@@ -12,6 +12,8 @@ export default function Parent({ app }: { app: App }) {
       <FamilyCard app={app} />
       <Advice app={app} />
       <Reward app={app} />
+      <Penalty app={app} />
+      <Advance app={app} />
       <MembersCard app={app} />
       <AddMember app={app} />
     </>
@@ -28,6 +30,7 @@ function FamilyCard({ app }: { app: App }) {
   const [mpct, setMpct] = useState(String(family.match_pct));
   const [mcap, setMcap] = useState(String(family.match_cap));
   const [guard, setGuard] = useState(gd(family));
+  const [sdays, setSdays] = useState(String(family.star_days ?? 4));
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
@@ -36,8 +39,10 @@ function FamilyCard({ app }: { app: App }) {
     const [, e2] = await rpc("update_family_rules", { p_bonus_step: Math.round(+step), p_bonus_pct: Math.round(+bonus), p_long_min: Math.round(+lmin), p_match_pct: Math.round(+mpct), p_match_cap: Math.round(+mcap) || 0 });
     if (e2) { setBusy(false); return toast(e2); }
     const [, e3] = await rpc("set_guardian", { p_label: guard });
+    if (e3) { setBusy(false); return toast(e3); }
+    const [, e4] = await rpc("set_star_days", { p_days: Math.round(+sdays) });
     setBusy(false);
-    if (e3) return toast(e3);
+    if (e4) return toast(e4);
     toast("已更新家庭設定");
     await reloadBase();
     await data.reload();
@@ -58,6 +63,9 @@ function FamilyCard({ app }: { app: App }) {
       </div>
       <label className="f">或自己輸入（例如：阿嬤、Ad）<input id="f-guard" maxLength={10} value={guard} onChange={(e) => setGuard(e.target.value)} /></label>
       <p className="note">App 裡的加碼、配對、理財約定和檢討提醒，都會用這個稱呼。</p>
+      <h3>星星條件</h3>
+      <label className="f">每週至少記帳幾天（0 = 不要求）<input id="f-sdays" type="number" inputMode="numeric" min={0} max={7} value={sdays} onChange={(e) => setSdays(e.target.value)} /></label>
+      <p className="note">月底結算時，每週都達成，而且回答了檢討問題，才拿得到星星。</p>
       <h3>夢想罐闖關加碼</h3>
       <div className="grid2">
         <label className="f">每存滿多少錢（元）<input id="f-step" type="number" inputMode="numeric" min={100} value={step} onChange={(e) => setStep(e.target.value)} /></label>
@@ -284,6 +292,111 @@ function AddMember({ app }: { app: App }) {
       <label className="f">登入密碼（{role === "parent" ? "家長 6–8" : "孩子 4–8"} 位數字）<input id="n-pin" type="password" inputMode="numeric" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} /></label>
       <div><button className="btn primary" disabled={busy || !name.trim() || pin.length < (role === "parent" ? 6 : 4)} onClick={add}>{busy ? "新增中…" : "新增"}</button></div>
       <p className="note">孩子只看得到自己的罐子和紀錄；家長看得到全家。</p>
+    </section>
+  );
+}
+
+function Penalty({ app }: { app: App }) {
+  const { members, sel, toast, data } = app;
+  const kids = members.filter((m) => m.role === "kid");
+  const [who, setWho] = useState(kids.find((k) => k.id === sel.id)?.id || kids[0]?.id || "");
+  const [jar, setJar] = useState("free");
+  const [amt, setAmt] = useState("");
+  const [reason, setReason] = useState("");
+  const [list, setList] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    const { data: rows } = await supabase.from("penalties").select("id,member_id,jar,amount,reason,created_at,refunded_at").order("created_at", { ascending: false }).limit(20);
+    setList(rows || []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!kids.length) return null;
+  async function give() {
+    setBusy(true);
+    const [, e] = await rpc("give_penalty", { p_member: who, p_jar: jar, p_amount: Math.round(+amt), p_reason: reason });
+    setBusy(false);
+    if (e) return toast(e);
+    toast("已扣款");
+    setAmt(""); setReason("");
+    await load();
+    if (who === sel.id) await data.reload();
+  }
+  async function refund(p: any) {
+    const [, e] = await rpc("refund_penalty", { p_id: p.id });
+    if (e) return toast(e);
+    toast("已退還");
+    await load();
+    if (p.member_id === sel.id) await data.reload();
+  }
+  const nameOf = (id: string) => members.find((m) => m.id === id)?.name || "";
+  return (
+    <section className="card">
+      <h2>扣款</h2>
+      <p className="small muted">依理財約定扣款，例如學校記警告。之後撤銷了，可以在下面按「退還」把錢還回去。</p>
+      <div className="grid2">
+        <label className="f">誰<select id="p-who" value={who} onChange={(e) => setWho(e.target.value)}>{kids.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        <label className="f">從哪個罐子扣<select id="p-jar" value={jar} onChange={(e) => setJar(e.target.value)}><option value="free">自由罐</option><option value="dream">夢想罐</option></select></label>
+        <label className="f">金額<input id="p-amt" type="number" inputMode="numeric" min={1} placeholder="300" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
+        <label className="f">原因<input id="p-reason" maxLength={40} placeholder="例如：學校警告一支" value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+      </div>
+      <div><Confirm label="扣款" confirmLabel={`確定從${nameOf(who)}的${JN[jar]}扣 ${fmt(+amt || 0)}`} className="btn danger" danger disabled={busy || !(+amt > 0) || !reason.trim()} onConfirm={give} /></div>
+      <p className="note">自由罐不夠扣時會變成負數，下個月放零用金時會先補回來。</p>
+      {list.length > 0 && (
+        <div className="list">
+          {list.map((p) => (
+            <div className="li" key={p.id} style={{ gridTemplateColumns: "1fr auto auto" }}>
+              <span className="t">{nameOf(p.member_id)} · {p.reason}<br /><span className="d">{JN[p.jar]} · {new Date(p.created_at).toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei" })}{p.refunded_at ? " · 已退還" : ""}</span></span>
+              <b className="num" style={{ color: p.refunded_at ? "var(--muted)" : "var(--warn)", textDecoration: p.refunded_at ? "line-through" : "none" }}>−{fmt(p.amount)}</b>
+              {p.refunded_at ? <span /> : <Confirm label="退還" confirmLabel="確定退還" className="btn sm" onConfirm={() => refund(p)} />}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Advance({ app }: { app: App }) {
+  const { members, sel, toast, data } = app;
+  const kids = members.filter((m) => m.role === "kid");
+  const [who, setWho] = useState(kids.find((k) => k.id === sel.id)?.id || kids[0]?.id || "");
+  const [amt, setAmt] = useState("");
+  const [list, setList] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const { data: rows } = await supabase.from("advances").select("id,member_id,amount,quarter,repay_month,repaid,created_at").order("created_at", { ascending: false }).limit(12);
+    setList(rows || []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!kids.length) return null;
+  async function give() {
+    const [, e] = await rpc("give_advance", { p_member: who, p_amount: Math.round(+amt) });
+    if (e) return toast(e);
+    toast("已預支，放進自由罐");
+    setAmt("");
+    await load();
+    if (who === sel.id) await data.reload();
+  }
+  const nameOf = (id: string) => members.find((m) => m.id === id)?.name || "";
+  const kid = members.find((m) => m.id === who);
+  return (
+    <section className="card">
+      <h2>預支零用金</h2>
+      <p className="small muted">每人每季可以預支一次，最多一個月的零用金。錢會先放進自由罐，下個月月初規劃時自動從零用金扣回。</p>
+      <div className="grid2">
+        <label className="f">誰<select id="a-who" value={who} onChange={(e) => setWho(e.target.value)}>{kids.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        <label className="f">金額（最多 {fmt(kid?.allowance || 0)}）<input id="a-amt" type="number" inputMode="numeric" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
+      </div>
+      <div><Confirm label="預支" confirmLabel={`確定預支 ${fmt(+amt || 0)} 給${nameOf(who)}`} className="btn primary" disabled={!(+amt > 0)} onConfirm={give} /></div>
+      {list.length > 0 && (
+        <div className="list">
+          {list.map((a) => (
+            <div className="kv small" key={a.id} style={{ padding: "6px 0" }}>
+              <span>{nameOf(a.member_id)} · {a.quarter.replace("-Q", " 年第 ")} 季</span>
+              <b>{fmt(a.amount)} · {a.repaid ? "已扣回" : `${+a.repay_month.slice(5)} 月扣回`}</b>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -7,15 +7,15 @@ import { Confirm } from "./ui";
 
 function template(app: App): string[] {
   const { sel, family } = app;
+  const g = gd(family);
   return [
-    `零用金每月 ${fmt(sel.allowance)}，每月 1 日發放。`,
-    `每月 1 日前完成月初規劃；長期罐每月至少 ${fmt(family.long_min)}。`,
-    `長期罐放多少，${gd(family)}就配對 ${family.match_pct}%，一起每月定期買股票；18 歲前不提領。`,
-    `夢想罐自己存的錢每存滿 ${fmt(family.bonus_step)}，月底結算時${gd(family)}加碼 ${family.bonus_pct}%；花掉後從 0 重新算。`,
-    "花了錢當天記帳；每週日晚上檢查一次有沒有漏記。",
-    `每月最後一個週末，和${gd(family)}一起完成月底檢討。`,
-    `買超過 NT$ 1,000 的東西前，先和${gd(family)}討論。`,
-    `連續 3 個月拿到星星，可以提出調高零用金，和${gd(family)}一起討論。`,
+    `每月零用金 ${fmt(sel.allowance)}，每月 1 日約定轉帳（若遇銀行休假，延到下一個工作日）。`,
+    `每月最後一天和${g}一起做結算和檢討，並設定下個月的罐子分配（長期罐每月最少 ${fmt(family.long_min)}，${g}配對同樣金額）。`,
+    `要買高於 NT$ 1,000 的東西，需要先和${g}討論。`,
+    "每人每季可以預支一次，預支後的下一個月從零用金扣除。",
+    `花了錢當天記帳，每週檢視有沒有遺漏；每週至少記帳 ${family.star_days ?? 4} 天。`,
+    `大考成績和${g}討論：高於＿＿分，加碼＿＿元；低於＿＿分，扣＿＿元。`,
+    "在學校要有學生的樣子：老師記警告扣＿＿元、記小過扣＿＿元（老師撤銷後退還）。",
   ];
 }
 

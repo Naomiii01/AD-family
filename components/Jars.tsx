@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { App } from "./Shell";
-import { rpc } from "@/lib/supabase";
+import { rpc, supabase } from "@/lib/supabase";
 import { JN, fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate, matchOf, stepBonus, gd } from "@/lib/util";
 import { JarSVG, Stars, Confirm } from "./ui";
 
@@ -22,7 +22,12 @@ export default function Jars({ app }: { app: App }) {
   const freeP = cur?.status === "active" && cur.free_start ? b.free / cur.free_start : b.free > 0 ? 0.5 : 0;
   const ms = Math.max(10000, Math.ceil((b.long + 1) / 10000) * 10000);
   const idle = daysSince(b.last_expense);
-  const showNudge = cur?.status === "active" && (idle === null ? true : idle >= 7);
+  const showNudge = cur?.status === "active" && (idle === null ? true : idle >= 2);
+  const [adv, setAdv] = useState<any>(null);
+  useEffect(() => {
+    supabase.from("advances").select("amount,repay_month,repaid").eq("member_id", sel.id).eq("repaid", false)
+      .then(({ data: rows }: any) => setAdv((rows || [])[0] || null));
+  }, [sel.id, b.free]);
 
   return (
     <>
@@ -34,9 +39,17 @@ export default function Jars({ app }: { app: App }) {
       )}
       {showNudge && (
         <div className="banner warn">
-          <span>{idle === null ? "這個月還沒有記帳紀錄。" : `已經 ${idle} 天沒有記帳了。`}花了錢記得記下來，月底檢討才看得清楚。</span>
+          <span>{idle === null ? "這個月還沒有記帳紀錄。" : `已經 ${idle} 天沒有記帳了。`}每週要記滿 {family.star_days ?? 4} 天才拿得到星星；沒花錢的日子也可以打卡。</span>
           <div><button className="btn sm primary" onClick={() => app.go("month")}>去記帳</button></div>
         </div>
+      )}
+      {adv && (
+        <div className="banner">
+          <span>預支了 {fmt(adv.amount)}，{+adv.repay_month.slice(5)} 月的零用金會先扣回這筆錢。</span>
+        </div>
+      )}
+      {b.free < 0 && (
+        <div className="banner warn"><span>自由罐目前是 {fmt(b.free)}（被扣款後不夠扣）。下個月放零用金時會先補回來。</span></div>
       )}
       <div className="trio">
         <div className="jarcol">

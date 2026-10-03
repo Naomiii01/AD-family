@@ -53,7 +53,7 @@ export default function Shell({ userId }: { userId: string }) {
     if (error) return setFatal("連線失敗，請檢查網路後重新整理");
     if (!m) return setFatal("這個帳號找不到家庭資料，可能已被家長移除。");
     const [{ data: f }, { data: ms }] = await Promise.all([
-      supabase.from("families").select("id,name,code,rate,bonus_pct,bonus_step,long_min,match_pct,match_cap,guardian").eq("id", m.family_id).single(),
+      supabase.from("families").select("id,name,code,rate,bonus_pct,bonus_step,long_min,match_pct,match_cap,guardian,star_days").eq("id", m.family_id).single(),
       supabase.from("members").select(MEMBER_COLS).eq("archived", false).order("created_at"),
     ]);
     const list = (ms || []).sort((a, b) => (a.id === m.id ? -1 : b.id === m.id ? 1 : a.role === b.role ? 0 : a.role === "kid" ? 1 : -1));

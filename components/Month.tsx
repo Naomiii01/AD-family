@@ -4,6 +4,7 @@ import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
 import { CATS, JARS, JN, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd } from "@/lib/util";
 import { MonthNav } from "./ui";
+import { WeekCard } from "./Weeks";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
 
@@ -38,7 +39,13 @@ function Plan({ app }: { app: App }) {
   const [extra, setExtra] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const total = sel.allowance + (Math.max(0, Math.round(+extra)) || 0);
+  const [adv, setAdv] = useState(0);
+  useEffect(() => {
+    supabase.from("advances").select("amount,repay_month,repaid").eq("member_id", sel.id).eq("repaid", false)
+      .then(({ data: rows }: any) => setAdv((rows || []).filter((x: any) => x.repay_month <= mk).reduce((t: number, x: any) => t + x.amount, 0)));
+  }, [sel.id, mk]);
+  const base = Math.max(0, sel.allowance - adv);
+  const total = base + (Math.max(0, Math.round(+extra)) || 0);
   const a = split(total, r);
   const g = data.goal;
   const openPrev = data.months.find((x) => x.status === "active" && x.month < mk);
@@ -118,6 +125,7 @@ function Plan({ app }: { app: App }) {
       <section className="card">
         <h3>1. 這個月有多少錢</h3>
         <div className="kv"><span>零用金（家長設定）</span><b>{fmt(sel.allowance)}</b></div>
+        {adv > 0 && <div className="kv"><span>扣回上次預支</span><b style={{ color: "var(--warn)" }}>−{fmt(adv)}</b></div>}
         <div className="grid2">
           <label className="f">額外收入<input id="p-ext" type="number" inputMode="numeric" min={0} placeholder="0" value={extra} onChange={(e) => setExtra(e.target.value)} /></label>
           <label className="f">來源<input id="p-note" maxLength={40} placeholder="紅包、打工、獎學金" value={note} onChange={(e) => setNote(e.target.value)} /></label>
@@ -204,6 +212,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           ))}
         </div>
+        {mo.alloc.advance > 0 && <p className="note">這個月零用金已先扣回預支 {fmt(mo.alloc.advance)}。</p>}
         {mo.alloc.match > 0 && <p className="small">{gd(app.family)}配對投資 <b style={{ color: "var(--long)" }}>+{fmt(mo.alloc.match)}</b>，這個月長期罐一共投資 {fmt(mo.alloc.long + mo.alloc.match)}。</p>}
         {mo.extra > 0 && <p className="note">含額外收入 {fmt(mo.extra)}{mo.extra_note ? `（${mo.extra_note}）` : ""}</p>}
       </section>
@@ -228,6 +237,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
         </section>
       )}
+      {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}
       {mo.status === "active" && !isCur && (
         <div className="banner warn">
           <span>{mkLabel(mk)} 還沒結算。月份已經過了，請到「檢討」完成結算，才能開始新的月份。</span>

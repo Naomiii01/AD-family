@@ -65,10 +65,29 @@ export default function Rules({ app }: { app: App }) {
         <h3>每個月的節奏</h3>
         <ol className="steps">
           <li><b>月初規劃</b>：確認零用金和額外收入，決定三個罐子的比例。</li>
-          <li><b>每天記帳</b>：花了錢就記，或用 Apple 捷徑快速記。</li>
-          <li><b>每週檢查</b>：週日晚上看看有沒有漏記，自由罐還剩多少。</li>
-          <li><b>月底檢討</b>：回答三個問題、決定結餘去向，結算時發夢想加碼。完成檢討就拿到一顆星。</li>
+          <li><b>每天記帳</b>：花了錢就記；沒花錢的日子按「今天沒有花錢」打卡。</li>
+          <li><b>每週檢查</b>：每週至少記帳 {family.star_days ?? 4} 天，週日晚上看看有沒有漏記。</li>
+          <li><b>月底檢討</b>：月底和{gd(family)}一起回答三個問題、決定結餘去向，結算時發夢想加碼。</li>
         </ol>
+      </section>
+
+      <section className="card">
+        <h3>怎麼拿到星星 ★</h3>
+        <ul className="plain">
+          <li>每一週都至少記帳 {family.star_days ?? 4} 天（月初、月底不滿一週的，依天數減少）。</li>
+          <li>月底檢討回答第 3 題「下個月想怎麼調整」，再加上第 1 或第 2 題。</li>
+          <li>兩個條件都做到，結算時就拿到這個月的星星。</li>
+        </ul>
+      </section>
+
+      <section className="card">
+        <h3>賞與罰</h3>
+        <ul className="plain">
+          <li>獎勵（例如成績進步）由{gd(family)}直接放進罐子。</li>
+          <li>扣款（例如學校記警告）從自由罐扣，事後撤銷會退還。</li>
+          <li>每季可以預支一次，下個月從零用金扣回。</li>
+          <li>詳細金額寫在「理財約定」，由{gd(family)}和你一起討論、簽名。</li>
+        </ul>
       </section>
 
       <section className="card">

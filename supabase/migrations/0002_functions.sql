@@ -464,3 +464,9 @@ alter table public.members
 -- ---------- what kids call the parent who sets the rules ----------
 alter table public.families add column if not exists guardian text not null default '家長';
 -- set_guardian(p_label) is parent-only; plan_month logs the match as guardian || '配對投資'.
+
+-- ---------- 2026-10-04: weekly logging stars, penalties, advances ----------
+-- Applied as Supabase migrations "weekly_logging_penalties_advances" and "week_progress_partial_weeks":
+-- families.star_days; tables checkins, penalties, advances (RLS: can_access);
+-- week_progress(member, month), no_spend_today(member), give_penalty, refund_penalty, give_advance, set_star_days;
+-- close_month requires week_progress.ok for the star; plan_month deducts an unpaid advance from the allowance.

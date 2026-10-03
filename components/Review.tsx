@@ -5,11 +5,13 @@ import { rpc } from "@/lib/supabase";
 import { JN, fmt, mkLabel, gd } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
+import { useWeeks, WeekList } from "./Weeks";
 
 export default function Review({ app }: { app: App }) {
   const { data, sel, mk, setMk, toast, family } = app;
   const mo = data.months.find((x) => x.month === mk);
   const ex = useExpenses(sel.id, mk);
+  const wk = useWeeks(sel.id, mk);
   const [rv, setRv] = useState({ best: "", regret: "", next: "", to: "dream" });
   const [busy, setBusy] = useState(false);
 
@@ -64,6 +66,7 @@ export default function Review({ app }: { app: App }) {
           <div className="card-h"><h3>結算完成</h3><span className={`star ${mo.star ? "" : "off"}`} style={{ fontSize: "1.5rem" }}>★</span></div>
           {mo.moved > 0 && <div className="kv"><span>自由罐結餘轉入{JN[mo.review?.to]}</span><b>{fmt(mo.moved)}</b></div>}
           {mo.alloc?.bonus > 0 && <div className="kv"><span>夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(mo.alloc.bonus)}</b></div>}
+          {mo.alloc?.weeks_ok === false && <p className="small muted">這個月有幾週記帳不到 {family.star_days} 天，所以沒有拿到星星。</p>}
           {mo.interest > 0 && <div className="kv"><span>長期罐利息</span><b>{fmt(mo.interest)}</b></div>}
           {mo.review?.best && <p><span className="muted small">最滿意的花費</span><br />{mo.review.best}</p>}
           {mo.review?.regret && <p><span className="muted small">有點後悔的花費</span><br />{mo.review.regret}</p>}
@@ -121,7 +124,20 @@ export default function Review({ app }: { app: App }) {
             <textarea id={`rv-${k}`} maxLength={300} value={rv[k]} onChange={(e) => setRv({ ...rv, [k]: e.target.value })} onBlur={() => save()} />
           </label>
         ))}
-        <p className="note">回答第 3 題，再加上第 1 或第 2 題，就能拿到本月的星星 ★</p>
+      </section>
+      <section className="card">
+        <h3>本月星星 ★ 的兩個條件</h3>
+        {(() => {
+          const qa = !!rv.next.trim() && (!!rv.best.trim() || !!rv.regret.trim());
+          const wkOk = family.star_days === 0 || !!wk.w?.ok;
+          return (
+            <>
+              <div className="kv small"><span>{wkOk ? "✓" : "○"} 每週至少記帳 {family.star_days} 天</span><b style={{ color: wkOk ? "var(--accent)" : "var(--warn)" }}>{wkOk ? "達成" : "還沒達成"}</b></div>
+              {wk.w && family.star_days > 0 && <WeekList w={wk.w} />}
+              <div className="kv small"><span>{qa ? "✓" : "○"} 回答第 3 題，再加上第 1 或第 2 題</span><b style={{ color: qa ? "var(--accent)" : "var(--warn)" }}>{qa ? "達成" : "還沒達成"}</b></div>
+            </>
+          );
+        })()}
       </section>
       <Confirm label="完成本月結算" confirmLabel="確定結算" className="btn primary big" disabled={busy} onConfirm={close} />
       <p className="note center">結算後這個月就不能再記帳或修改。建議和{gd(family)}一起完成。</p>

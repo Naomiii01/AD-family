@@ -5,16 +5,16 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v5";
+const KEY = "adf-demo-v6";
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -66,7 +66,10 @@ const F: Record<string, (a: any) => any> = {
     if (db.months.some((m) => m.member_id === p_member && m.month === p_month)) fail("這個月已經規劃過了");
     const open = db.months.filter((m) => m.member_id === p_member && m.status === "active" && m.month < p_month).sort((a, b) => (a.month < b.month ? -1 : 1))[0];
     if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
-    const total = mem(p_member).allowance + (p_extra || 0);
+    let inc = mem(p_member).allowance;
+    const adv = db.advances.find((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
+    if (adv) { inc = Math.max(0, inc - adv.amount); adv.repaid = true; }
+    const total = inc + (p_extra || 0);
     const a = { free: Math.round((total * p_free) / 100), dream: Math.round((total * p_dream) / 100), long: 0 };
     a.long = Math.max(0, total - a.free - a.dream);
     const me = mem(p_member), fam = famOf(p_member);
@@ -80,6 +83,7 @@ const F: Record<string, (a: any) => any> = {
     (["free", "dream", "long"] as const).forEach((j) => log(p_member, j, a[j], label(p_month), p_month, "allowance"));
     log(p_member, "long", match, fam.guardian + "配對投資", p_month, "match");
     (a as any).match = match;
+    (a as any).advance = adv ? adv.amount : 0;
     db.months.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, month: p_month, status: "active", income: mem(p_member).allowance,
       extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio: { free: p_free, dream: p_dream, long: p_long }, alloc: a,
       free_start: bal(p_member, "free"), review: {}, interest: 0, moved: 0, star: false, created_at: now() });
@@ -118,9 +122,10 @@ const F: Record<string, (a: any) => any> = {
       }
     }
     const r = m.review || {};
-    const star = !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
-    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus } });
-    return { star, interest: it, moved: left, bonus };
+    const weeksOk = weekProgress(p_member, p_month).ok;
+    const star = weeksOk && !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
+    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus, weeks_ok: weeksOk } });
+    return { star, interest: it, moved: left, bonus, weeks_ok: weeksOk };
   },
   set_goal: ({ p_member, p_name, p_price }) => {
     needAccess(p_member);
@@ -147,6 +152,43 @@ const F: Record<string, (a: any) => any> = {
     log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
     Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
     Object.assign(mem(p_member), { dream_tiers: 0, dream_reset_at: now() });
+  },
+  week_progress: ({ p_member, p_month }) => { needAccess(p_member); return weekProgress(p_member, p_month); },
+  no_spend_today: ({ p_member }) => {
+    needAccess(p_member);
+    const day = todayTW();
+    if (!db.checkins.some((c) => c.member_id === p_member && c.day === day)) db.checkins.push({ family_id: mem(p_member).family_id, member_id: p_member, day, created_at: now() });
+  },
+  give_penalty: ({ p_member, p_jar, p_amount, p_reason }) => {
+    needParentOf(p_member);
+    if (!(p_amount > 0)) fail("請輸入正確的金額");
+    if (!(p_reason || "").trim()) fail("請寫下扣款原因");
+    db.penalties.push({ id: id(), family_id: mem(p_member).family_id, member_id: p_member, jar: p_jar, amount: p_amount, reason: p_reason.trim().slice(0, 40), created_at: now(), refunded_at: null });
+    log(p_member, p_jar, -p_amount, "扣款：" + p_reason.trim().slice(0, 40), curMonth(), "penalty");
+  },
+  refund_penalty: ({ p_id }) => {
+    const p = db.penalties.find((x) => x.id === p_id) || fail("找不到這筆扣款");
+    needParentOf(p.member_id);
+    if (p.refunded_at) fail("這筆已經退還了");
+    p.refunded_at = now();
+    log(p.member_id, p.jar, p.amount, "退還：" + p.reason, curMonth(), "refund");
+  },
+  give_advance: ({ p_member, p_amount }) => {
+    needParentOf(p_member);
+    const m = mem(p_member);
+    if (!(p_amount > 0)) fail("請輸入正確的金額");
+    if (p_amount > m.allowance) fail(`預支不能超過一個月的零用金（${m.allowance} 元）`);
+    const t = todayTW(); const q = `${t.slice(0, 4)}-Q${Math.ceil(+t.slice(5, 7) / 3)}`;
+    if (db.advances.some((x) => x.member_id === p_member && x.quarter === q)) fail("這一季已經預支過了");
+    if (db.advances.some((x) => x.member_id === p_member && !x.repaid)) fail("上一次預支還沒扣回");
+    const nm = shiftMonth(curMonth(), 1);
+    db.advances.push({ id: id(), family_id: m.family_id, member_id: p_member, amount: p_amount, quarter: q, repay_month: nm, repaid: false, created_at: now() });
+    log(p_member, "free", p_amount, `預支零用金（${+nm.slice(5)} 月扣回）`, curMonth(), "advance");
+  },
+  set_star_days: ({ p_days }) => {
+    if (!amParent()) fail("只有家長可以做這件事");
+    if (!(p_days >= 0 && p_days <= 7)) fail("天數要在 0 到 7 之間");
+    db.families.find((f) => f.id === myFam()).star_days = p_days;
   },
   set_guardian: ({ p_label }) => {
     if (!amParent()) fail("只有家長可以做這件事");
@@ -235,6 +277,29 @@ const F: Record<string, (a: any) => any> = {
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
+const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+const addDays = (iso: string, n: number) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+function weekProgress(mid: string, mk: string) {
+  const need = famOf(mid).star_days ?? 4;
+  const days = new Set<string>([
+    ...db.expenses.filter((e) => e.member_id === mid && !e.voided).map((e) => e.spent_on),
+    ...db.checkins.filter((c) => c.member_id === mid).map((c) => c.day),
+  ]);
+  const mStart = mk + "-01", mEnd = addDays(shiftMonth(mk, 1) + "-01", -1), today = todayTW();
+  const dow = (new Date(mStart + "T00:00:00Z").getUTCDay() + 6) % 7;
+  let w = addDays(mStart, -dow), ok = true;
+  const weeks: Row[] = [];
+  while (w <= mEnd) {
+    const st = w < mStart ? mStart : w, en = addDays(w, 6) > mEnd ? mEnd : addDays(w, 6);
+    const len = Math.round((new Date(en).getTime() - new Date(st).getTime()) / 864e5) + 1;
+    let n = 0; for (let d = st; d <= en; d = addDays(d, 1)) if (days.has(d)) n++;
+    const wneed = len >= 4 ? Math.ceil((need * len) / 7) : 0;
+    weeks.push({ start: st, end: en, days: n, need: wneed, counted: len >= 4, done: n >= wneed, future: st > today });
+    if (n < wneed) ok = false;
+    w = addDays(w, 7);
+  }
+  return { ok, need, weeks, today_logged: days.has(today) };
+}
 const famOf = (mid: string) => db.families.find((f) => f.id === mem(mid).family_id);
 function dreamOwn(mid: string) {
   const reset = mem(mid).dream_reset_at || "2000-01-01";
@@ -253,7 +318,7 @@ function addExpense({ p_member, p_item, p_amount, p_type, p_category }: any, sou
   const free = bal(p_member, "free");
   if (p_amount > free) fail(`自由罐只剩 ${free} 元，這筆錢不夠付`);
   const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type,
-    category: p_category || "其他", source, voided: false, spent_on: (at || now()).slice(0, 10), created_at: at || now() };
+    category: p_category || "其他", source, voided: false, spent_on: at ? at.slice(0, 10) : todayTW(), created_at: at || now() };
   db.expenses.push(row);
   log(p_member, "free", -p_amount, row.item, mk, "expense", at);
   return { id: row.id, left: free - p_amount };
@@ -359,23 +424,29 @@ export function demoReset() {
 
 function seed(): DB {
   db = blank();
-  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", created_at: now() };
+  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", star_days: 4, created_at: now() };
   db.families.push(fam);
   const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
     db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme, created_at: now() });
   add("m1", "Naomi", "parent", 6000, "morandi", true);
   add("m2", "Ad", "parent", 5000, "earth");
-  add("m3", "Jalen", "kid", 1500, "court");
-  add("m4", "Rebecca", "kid", 1200, "kpop");
+  add("m3", "Jalen", "kid", 4500, "court");
+  add("m4", "Rebecca", "kid", 4000, "kpop");
   const prev = shiftMonth(curMonth(), -1), cur = curMonth();
   const as = (mid: string) => (db.uid = mem(mid).user_id);
   const d = (mk: string, day: number) => `${mk}-${String(day).padStart(2, "0")}T04:00:00.000Z`;
   const startOf = d(prev, 1);
   const seedJar = (mid: string, dream: number, long: number) => { log(mid, "dream", dream, "之前存的", prev, "reward", startOf); log(mid, "long", long, "之前存的", prev, "reward", startOf); };
-  seedJar("m1", 8000, 20000); seedJar("m2", 3000, 30000); seedJar("m3", 4300, 6000); seedJar("m4", 1500, 4000);
+  seedJar("m1", 8000, 20000); seedJar("m2", 3000, 30000); seedJar("m3", 2500, 6000); seedJar("m4", 1500, 4000);
   const goal = (mid: string, name: string, price: number) => db.goals.push({ id: id(), family_id: "f1", member_id: mid, name, price, status: "active", bonus_given: false, created_at: startOf });
   goal("m1", "全家沖繩旅行", 60000); goal("m2", "登山背包", 6800); goal("m3", "暑假籃球營＋新球鞋", 8800); goal("m4", "演唱會門票", 3800);
 
+  const checkin = (mid: string, mk: string, upto: number, skip: (day: number) => boolean) => {
+    for (let dd = 1; dd <= upto; dd++) if (!skip(dd)) db.checkins.push({ family_id: "f1", member_id: mid, day: `${mk}-${String(dd).padStart(2, "0")}`, created_at: now() });
+  };
+  const lastDay = +addDays(shiftMonth(prev, 1) + "-01", -1).slice(8);
+  checkin("m3", prev, lastDay, (dd) => dd % 3 === 0);
+  checkin("m4", prev, lastDay, (dd) => dd % 3 === 0 || (dd >= 8 && dd <= 14));
   const month = (mid: string, mk: string, r: number[], exps: [string, number, string, string, number][], review?: Row) => {
     as(mid);
     F.plan_month({ p_member: mid, p_month: mk, p_extra: 0, p_extra_note: "", p_free: r[0], p_dream: r[1], p_long: r[2] });
@@ -389,23 +460,31 @@ function seed(): DB {
       db.ledger.filter((l) => l.member_id === mid && l.month === mk && ["move", "interest", "bonus"].includes(l.kind)).forEach((l) => (l.created_at = d(mk, 28)));
     }
   };
-  month("m3", prev, [40, 25, 35], [["珍珠奶茶", 65, "want", "飲料點心", 3], ["籃球場租借", 100, "want", "娛樂", 8], ["遊戲點數", 150, "want", "娛樂", 12], ["補習班講義", 120, "need", "文具學習", 18]],
+  month("m3", prev, [60, 25, 15], [["珍珠奶茶", 65, "want", "飲料點心", 3], ["籃球場租借", 100, "want", "娛樂", 8], ["遊戲點數", 150, "want", "娛樂", 12], ["補習班講義", 120, "need", "文具學習", 18]],
     { best: "和同學一起租球場打球", regret: "遊戲點數一下就用完了", next: "遊戲點數一個月最多 100 元", to: "dream" });
-  month("m4", prev, [30, 25, 45], [["偶像小卡", 180, "want", "娛樂", 5], ["文具", 90, "need", "文具學習", 10], ["手搖飲", 55, "want", "飲料點心", 20]],
+  month("m4", prev, [60, 25, 15], [["偶像小卡", 180, "want", "娛樂", 5], ["文具", 90, "need", "文具學習", 10], ["手搖飲", 55, "want", "飲料點心", 20]],
     { best: "文具用得到", regret: "小卡買太多張", next: "小卡先列清單再買", to: "dream" });
   month("m1", prev, [40, 30, 30], [["咖啡", 450, "want", "飲料點心", 9], ["書", 380, "need", "文具學習", 15]], { best: "買了一本好書", regret: "", next: "和孩子一起做月底檢討", to: "long" });
   month("m2", prev, [40, 30, 30], [["登山步道交通", 300, "need", "交通", 14]], { best: "週末帶孩子去爬山", regret: "", next: "記得每週記帳", to: "long" });
   const today = +new Date().toLocaleString("en-CA", { timeZone: "Asia/Taipei", day: "2-digit" });
-  month("m3", cur, [40, 25, 35], [["雞排", 85, "want", "正餐", 1], ["公車", 30, "need", "交通", Math.max(1, Math.min(today, 2))]]);
+  checkin("m3", cur, Math.max(0, today - 1), () => false);
+  month("m3", cur, [60, 25, 15], [["雞排", 85, "want", "正餐", 1], ["公車", 30, "need", "交通", Math.max(1, Math.min(today, 2))]]);
   month("m1", cur, [40, 30, 30], []);
 
   as("m3");
-  F.save_agreement({ p_member: "m3", p_items: [
-    "零用金每月 NT$ 1,500，每月 1 日發放。", "每月 1 日前完成月初規劃；長期罐每月至少 NT$ 500，Ad 配對一樣的金額一起買股票。", "夢想罐自己存的錢每存滿 NT$ 5,000，月底結算時加碼 10%；花掉後從 0 重新算。",
-    "花了錢當天記帳；每週日晚上檢查一次。", "每月最後一個週末，和 Ad 一起完成月底檢討。",
-    "遊戲點數從自由罐出，一個月最多 NT$ 100。", "連續 3 個月拿到星星，可以提出調高零用金。"] });
-  F.sign_agreement({ p_member: "m3" });
-  F.save_year_plan({ p_member: "m3", p_year: +cur.slice(0, 4), p_data: { target_long: 6000, wishes: "新籃球鞋\n暑假籃球營", incomes: [{ name: "過年紅包", month: 2, amount: 6000 }], spends: [{ name: "暑假籃球營", month: 7, amount: 3500 }], reflection: "" } });
+  const items = (amt: string) => [
+    `每月零用金 NT$ ${amt}，每月 1 日約定轉帳（若遇銀行休假，延到下一個工作日）。`,
+    "每月最後一天和爸爸一起做結算和檢討，並設定下個月的罐子分配（長期罐每月最少 NT$ 500，爸爸配對同樣金額）。",
+    "要買高於 NT$ 1,000 的東西，需要先和爸爸討論。",
+    "每人每季可以預支一次，預支後的下一個月從零用金扣除。",
+    "花了錢當天記帳，每週檢視有沒有遺漏；每週至少記帳 4 天。",
+    "大考成績和爸爸討論：高於＿＿分，加碼＿＿元；低於＿＿分，扣＿＿元。",
+    "在學校要有學生的樣子：老師記警告扣＿＿元、記小過扣＿＿元（老師撤銷後退還）。"];
+  F.save_agreement({ p_member: "m3", p_items: items("4,500") });
+  as("m4");
+  F.save_agreement({ p_member: "m4", p_items: items("4,000") });
+  as("m3");
+  F.save_year_plan({ p_member: "m3", p_year: +cur.slice(0, 4), p_data: { target_long: 15000, wishes: "新籃球鞋\n暑假籃球營", incomes: [{ name: "過年紅包", month: 2, amount: 6000 }], spends: [{ name: "暑假籃球營", month: 7, amount: 3500 }], reflection: "" } });
   db.uid = null;
   return db;
 }
