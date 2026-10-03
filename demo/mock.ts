@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v2";
+const KEY = "adf-demo-v3";
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
@@ -56,7 +56,8 @@ const F: Record<string, (a: any) => any> = {
   balances: ({ p_member }) => {
     needAccess(p_member);
     const ex = db.expenses.filter((e) => e.member_id === p_member && !e.voided).map((e) => e.created_at).sort();
-    return { free: bal(p_member, "free"), dream: bal(p_member, "dream"), long: bal(p_member, "long"), last_expense: ex[ex.length - 1] || null };
+    return { free: bal(p_member, "free"), dream: bal(p_member, "dream"), long: bal(p_member, "long"), dream_own: dreamOwn(p_member),
+      dream_tiers: mem(p_member).dream_tiers || 0, last_expense: ex[ex.length - 1] || null };
   },
   plan_month: ({ p_member, p_month, p_extra, p_extra_note, p_free, p_dream, p_long }) => {
     needAccess(p_member);
@@ -68,7 +69,17 @@ const F: Record<string, (a: any) => any> = {
     const total = mem(p_member).allowance + (p_extra || 0);
     const a = { free: Math.round((total * p_free) / 100), dream: Math.round((total * p_dream) / 100), long: 0 };
     a.long = Math.max(0, total - a.free - a.dream);
+    const me = mem(p_member), fam = famOf(p_member);
+    let match = 0;
+    if (me.role === "kid") {
+      const min = Math.min(fam.long_min, total);
+      if (a.long < min) fail(`長期罐每月至少要放 ${min} 元，這樣分配只有 ${a.long} 元`);
+      match = Math.round((a.long * fam.match_pct) / 100);
+      if (fam.match_cap > 0) match = Math.min(match, fam.match_cap);
+    }
     (["free", "dream", "long"] as const).forEach((j) => log(p_member, j, a[j], label(p_month), p_month, "allowance"));
+    log(p_member, "long", match, "爸媽配對投資", p_month, "match");
+    (a as any).match = match;
     db.months.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, month: p_month, status: "active", income: mem(p_member).allowance,
       extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio: { free: p_free, dream: p_dream, long: p_long }, alloc: a,
       free_start: bal(p_member, "free"), review: {}, interest: 0, moved: 0, star: false, created_at: now() });
@@ -96,10 +107,20 @@ const F: Record<string, (a: any) => any> = {
     const rate = db.families.find((f) => f.id === mem(p_member).family_id).rate;
     const it = Math.round((bal(p_member, "long") * rate) / 100);
     log(p_member, "long", it, `家庭銀行利息 ${rate}%`, p_month, "interest");
+    const me = mem(p_member), fam = famOf(p_member);
+    let bonus = 0;
+    if (me.role === "kid" && fam.bonus_pct > 0) {
+      const tiers = Math.floor(dreamOwn(p_member) / fam.bonus_step);
+      if (tiers > (me.dream_tiers || 0)) {
+        bonus = (tiers - (me.dream_tiers || 0)) * Math.round((fam.bonus_step * fam.bonus_pct) / 100);
+        log(p_member, "dream", bonus, `夢想加碼：存滿 ${(tiers * fam.bonus_step).toLocaleString("en-US")} 元`, p_month, "bonus");
+        me.dream_tiers = tiers;
+      }
+    }
     const r = m.review || {};
     const star = !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
-    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now() });
-    return { star, interest: it, moved: left };
+    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus } });
+    return { star, interest: it, moved: left, bonus };
   },
   set_goal: ({ p_member, p_name, p_price }) => {
     needAccess(p_member);
@@ -125,6 +146,15 @@ const F: Record<string, (a: any) => any> = {
     if (bal(p_member, "dream") < g.price) fail("夢想罐還不夠");
     log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
     Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
+    Object.assign(mem(p_member), { dream_tiers: 0, dream_reset_at: now() });
+  },
+  update_family_rules: ({ p_bonus_step, p_bonus_pct, p_long_min, p_match_pct, p_match_cap }) => {
+    if (!amParent()) fail("只有家長可以做這件事");
+    if (!(p_bonus_step >= 100)) fail("加碼關卡至少 100 元");
+    if (!(p_bonus_pct >= 0 && p_bonus_pct <= 50)) fail("加碼比例要在 0 到 50% 之間");
+    if (!(p_long_min >= 0)) fail("長期罐最低金額不正確");
+    if (!(p_match_pct >= 0 && p_match_pct <= 300)) fail("配對比例要在 0 到 300% 之間");
+    Object.assign(db.families.find((f) => f.id === myFam()), { bonus_step: p_bonus_step, bonus_pct: p_bonus_pct, long_min: p_long_min, match_pct: p_match_pct, match_cap: Math.max(0, p_match_cap || 0) });
   },
   give_bonus: ({ p_member }) => {
     needParentOf(p_member);
@@ -200,6 +230,11 @@ const F: Record<string, (a: any) => any> = {
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
+const famOf = (mid: string) => db.families.find((f) => f.id === mem(mid).family_id);
+function dreamOwn(mid: string) {
+  const reset = mem(mid).dream_reset_at || "2000-01-01";
+  return db.ledger.filter((l) => l.member_id === mid && l.jar === "dream" && l.amount > 0 && l.kind !== "bonus" && l.created_at > reset).reduce((s, l) => s + l.amount, 0);
+}
 function activeGoal(mid: string) {
   return db.goals.find((g) => g.member_id === mid && g.status === "active");
 }
@@ -319,7 +354,7 @@ export function demoReset() {
 
 function seed(): DB {
   db = blank();
-  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 2, bonus_pct: 10, created_at: now() };
+  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, created_at: now() };
   db.families.push(fam);
   const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
     db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme, created_at: now() });
@@ -332,9 +367,9 @@ function seed(): DB {
   const d = (mk: string, day: number) => `${mk}-${String(day).padStart(2, "0")}T04:00:00.000Z`;
   const startOf = d(prev, 1);
   const seedJar = (mid: string, dream: number, long: number) => { log(mid, "dream", dream, "之前存的", prev, "reward", startOf); log(mid, "long", long, "之前存的", prev, "reward", startOf); };
-  seedJar("m1", 8000, 20000); seedJar("m2", 3000, 30000); seedJar("m3", 1200, 3000); seedJar("m4", 800, 2000);
+  seedJar("m1", 8000, 20000); seedJar("m2", 3000, 30000); seedJar("m3", 4300, 6000); seedJar("m4", 1500, 4000);
   const goal = (mid: string, name: string, price: number) => db.goals.push({ id: id(), family_id: "f1", member_id: mid, name, price, status: "active", bonus_given: false, created_at: startOf });
-  goal("m1", "全家沖繩旅行", 60000); goal("m2", "登山背包", 6800); goal("m3", "新籃球鞋", 4280); goal("m4", "演唱會門票", 3800);
+  goal("m1", "全家沖繩旅行", 60000); goal("m2", "登山背包", 6800); goal("m3", "暑假籃球營＋新球鞋", 8800); goal("m4", "演唱會門票", 3800);
 
   const month = (mid: string, mk: string, r: number[], exps: [string, number, string, string, number][], review?: Row) => {
     as(mid);
@@ -343,21 +378,25 @@ function seed(): DB {
     m.created_at = d(mk, 1);
     db.ledger.filter((l) => l.member_id === mid && l.month === mk).forEach((l) => (l.created_at = d(mk, 1)));
     exps.forEach(([item, amt, type, cat, day]) => addExpense({ p_member: mid, p_item: item, p_amount: amt, p_type: type, p_category: cat }, "app", d(mk, day), mk));
-    if (review) { F.save_review({ p_member: mid, p_month: mk, p_review: review }); F.close_month({ p_member: mid, p_month: mk }); }
+    if (review) {
+      F.save_review({ p_member: mid, p_month: mk, p_review: review });
+      F.close_month({ p_member: mid, p_month: mk });
+      db.ledger.filter((l) => l.member_id === mid && l.month === mk && ["move", "interest", "bonus"].includes(l.kind)).forEach((l) => (l.created_at = d(mk, 28)));
+    }
   };
-  month("m3", prev, [50, 30, 20], [["珍珠奶茶", 65, "want", "飲料點心", 3], ["籃球場租借", 100, "want", "娛樂", 8], ["遊戲點數", 150, "want", "娛樂", 12], ["補習班講義", 120, "need", "文具學習", 18]],
+  month("m3", prev, [40, 25, 35], [["珍珠奶茶", 65, "want", "飲料點心", 3], ["籃球場租借", 100, "want", "娛樂", 8], ["遊戲點數", 150, "want", "娛樂", 12], ["補習班講義", 120, "need", "文具學習", 18]],
     { best: "和同學一起租球場打球", regret: "遊戲點數一下就用完了", next: "遊戲點數一個月最多 100 元", to: "dream" });
-  month("m4", prev, [40, 40, 20], [["偶像小卡", 180, "want", "娛樂", 5], ["文具", 90, "need", "文具學習", 10], ["手搖飲", 55, "want", "飲料點心", 20]],
+  month("m4", prev, [30, 25, 45], [["偶像小卡", 180, "want", "娛樂", 5], ["文具", 90, "need", "文具學習", 10], ["手搖飲", 55, "want", "飲料點心", 20]],
     { best: "文具用得到", regret: "小卡買太多張", next: "小卡先列清單再買", to: "dream" });
   month("m1", prev, [40, 30, 30], [["咖啡", 450, "want", "飲料點心", 9], ["書", 380, "need", "文具學習", 15]], { best: "買了一本好書", regret: "", next: "和孩子一起做月底檢討", to: "long" });
   month("m2", prev, [40, 30, 30], [["登山步道交通", 300, "need", "交通", 14]], { best: "週末帶孩子去爬山", regret: "", next: "記得每週記帳", to: "long" });
   const today = +new Date().toLocaleString("en-CA", { timeZone: "Asia/Taipei", day: "2-digit" });
-  month("m3", cur, [50, 30, 20], [["雞排", 85, "want", "正餐", 1], ["公車", 30, "need", "交通", Math.max(1, Math.min(today, 2))]]);
+  month("m3", cur, [40, 25, 35], [["雞排", 85, "want", "正餐", 1], ["公車", 30, "need", "交通", Math.max(1, Math.min(today, 2))]]);
   month("m1", cur, [40, 30, 30], []);
 
   as("m3");
   F.save_agreement({ p_member: "m3", p_items: [
-    "零用金每月 NT$ 1,500，每月 1 日發放。", "每月 1 日前完成月初規劃：長期罐至少 20%，夢想罐至少 20%。",
+    "零用金每月 NT$ 1,500，每月 1 日發放。", "每月 1 日前完成月初規劃；長期罐每月至少 NT$ 500，Ad 配對一樣的金額一起買股票。", "夢想罐自己存的錢每存滿 NT$ 5,000，月底結算時加碼 10%；花掉後從 0 重新算。",
     "花了錢當天記帳；每週日晚上檢查一次。", "每月最後一個週末，和 Ad 一起完成月底檢討。",
     "遊戲點數從自由罐出，一個月最多 NT$ 100。", "連續 3 個月拿到星星，可以提出調高零用金。"] });
   F.sign_agreement({ p_member: "m3" });

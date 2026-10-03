@@ -448,3 +448,15 @@ begin
 end $$;
 revoke execute on function public.set_theme(uuid, text) from public, anon;
 grant execute on function public.set_theme(uuid, text) to authenticated;
+
+-- ---------- 2026-10-03: dream milestone bonus + long-term matching ----------
+-- See the Supabase migration "milestone_bonus_and_matching" for the full function bodies
+-- (plan_month, close_month, buy_goal, balances, update_family_rules, _dream_own).
+alter table public.families
+  add column if not exists bonus_step int not null default 5000,
+  add column if not exists long_min int not null default 500,
+  add column if not exists match_pct int not null default 100,
+  add column if not exists match_cap int not null default 0;
+alter table public.members
+  add column if not exists dream_tiers int not null default 0,
+  add column if not exists dream_reset_at timestamptz not null default '2000-01-01';

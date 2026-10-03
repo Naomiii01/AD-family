@@ -2,15 +2,16 @@
 import { useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
-import { JN, fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate } from "@/lib/util";
+import { JN, fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate, matchOf, stepBonus } from "@/lib/util";
 import { JarSVG, Stars, Confirm } from "./ui";
 
 export function monthlyPlan(app: App) {
   const { data, sel } = app;
   const cur = data.months.find((x) => x.month === curMonth());
-  if (cur) return cur.alloc;
+  if (cur) return { match: 0, ...cur.alloc };
   const last = [...data.months].reverse()[0];
-  return split(sel.allowance, last?.ratio || defRatio(sel.role));
+  const a = split(sel.allowance, last?.ratio || defRatio(sel.role));
+  return { ...a, match: matchOf(app.family, sel.role, a.long) };
 }
 
 export default function Jars({ app }: { app: App }) {
@@ -75,7 +76,10 @@ export default function Jars({ app }: { app: App }) {
           </div>
         </section>
       )}
-      <p className="note center">家庭銀行月息 {Number(family.rate)}% · 夢想過半加碼 {family.bonus_pct}%</p>
+      <p className="note center">
+        {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，爸媽配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
+        {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}
+      </p>
     </>
   );
 }
@@ -129,7 +133,6 @@ function DreamCard({ app }: { app: App }) {
   const per = monthlyPlan(app).dream;
   const rem = Math.max(0, g.price - b.dream);
   const months = per > 0 ? Math.ceil(rem / per) : Infinity;
-  const bonus = Math.round((g.price * family.bonus_pct) / 100);
   const pendLeft = g.pending_at ? Math.ceil((new Date(g.pending_at).getTime() + 7 * 86400000 - Date.now()) / 86400000) : 0;
   const canOverride = isParent && !isSelf;
 
@@ -147,14 +150,7 @@ function DreamCard({ app }: { app: App }) {
       ) : (
         <>
           <p>{months === Infinity ? "目前夢想罐每月放 0 元，到「本月」把夢想罐調高一點。" : <>照目前的分配（每月 {fmt(per)}），大約還要 <b>{months} 個月</b>。</>}</p>
-          {family.bonus_pct > 0 && (
-            <p className="note">
-              {g.bonus_given ? "爸媽的過半加碼已經發放了。" : pct >= 0.5 ? `已經過半！可以請爸媽發放 ${family.bonus_pct}% 加碼（${fmt(bonus)}）。` : `存到一半（${fmt(g.price / 2)}）時，爸媽會加碼 ${family.bonus_pct}%。`}
-            </p>
-          )}
-          {canOverride && !g.bonus_given && pct >= 0.5 && (
-            <div><button className="btn primary sm" disabled={busy} onClick={() => act("give_bonus", { p_member: sel.id }, `已發放 ${fmt(bonus)}`)}>發放夢想加碼 {fmt(bonus)}</button></div>
-          )}
+          {sel.role === "kid" && family.bonus_pct > 0 && <MilestoneNote app={app} />}
         </>
       )}
       {g.pending_at ? (
@@ -178,20 +174,54 @@ function DreamCard({ app }: { app: App }) {
 }
 
 function LongCard({ app }: { app: App }) {
-  const { data, family } = app;
+  const { data, family, sel } = app;
   const [years, setYears] = useState(10);
   const rate = Number(family.rate);
-  const per = monthlyPlan(app).long;
+  const plan = monthlyPlan(app);
+  const per = plan.long + (plan.match || 0);
   return (
     <section className="card">
-      <div className="card-h"><h2>長期罐會自己長大</h2><span className="pill active">家庭銀行月息 {rate}%</span></div>
-      <p className="small">每月結算時，爸媽會依長期罐的金額發利息。這個月結算大約會拿到 <b className="num">{fmt((data.bal.long * rate) / 100)}</b>。長期罐的錢只進不出。</p>
-      <div className="kv small"><span className="muted">如果每月放 {fmt(per)}，持續</span><b>{years} 年</b></div>
+      <div className="card-h"><h2>長期罐：定期投資</h2>{rate > 0 && <span className="pill active">家庭銀行月息 {rate}%</span>}</div>
+      {sel.role === "kid" ? (
+        <>
+          <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，爸媽就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期定額買股票，只進不出。</p>
+          <div className="grid3 center">
+            <div><div className="note">你放</div><b className="num">{fmt(plan.long)}</b></div>
+            <div><div className="note">爸媽配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(plan.match || 0)}</b></div>
+            <div><div className="note">每月投資</div><b className="num">{fmt(per)}</b></div>
+          </div>
+        </>
+      ) : (
+        <p className="small">長期罐的錢只進不出，每月定期投資。</p>
+      )}
+      {rate > 0 && <p className="note">月底結算時，家庭銀行另外依長期罐金額發 {rate}% 利息，這個月大約 {fmt((data.bal.long * rate) / 100)}。</p>}
+      <div className="kv small"><span className="muted">每月投資 {fmt(per)}，持續</span><b>{years} 年</b></div>
       <input id="yrs" type="range" min={3} max={30} step={1} value={years} onChange={(e) => setYears(+e.target.value)} aria-label="年數" />
       <GrowthChart start={data.bal.long} monthly={per} years={years} />
       <div className="legend"><span><i style={{ background: "var(--long)" }} />投資，年報酬 6%</span><span><i style={{ background: "var(--muted)" }} />只存不投資</span></div>
-      <p className="note">圖表用真實世界長期投資常見的年報酬 6% 示意複利。家庭銀行的利率是爸媽給的練習利率；真實投資有漲有跌，不保證報酬。</p>
+      <p className="note">圖表用長期投資常見的年報酬 6% 示意複利。真實股票有漲有跌，不保證報酬。</p>
     </section>
+  );
+}
+
+function MilestoneNote({ app }: { app: App }) {
+  const { data, family } = app;
+  const own = data.bal.dream_own || 0;
+  const tiers = data.bal.dream_tiers || 0;
+  const step = family.bonus_step;
+  const reached = Math.floor(own / step);
+  const next = (reached + 1) * step;
+  const bonus = stepBonus(family);
+  const pending = reached > tiers;
+  return (
+    <div className="sug">
+      <div className="kv small"><span>夢想加碼關卡</span><b>{tiers > 0 ? `已拿 ${tiers} 次 · ${fmt(tiers * bonus)}` : "還沒拿過"}</b></div>
+      <div className="bar"><span style={{ width: `${clamp((own % step) / step, 0, 1) * 100}%`, background: "var(--accent)" }} /></div>
+      <p className="small">
+        自己存了 {fmt(own)}。{pending ? `已經存滿 ${fmt(reached * step)}，月底結算時會拿到加碼 ${fmt((reached - tiers) * bonus)}。` : `再存 ${fmt(next - own)} 到 ${fmt(next)}，月底結算時爸媽加碼 ${fmt(bonus)}。`}
+      </p>
+      <p className="note">只算自己存進夢想罐的錢；夢想罐花掉後，關卡從 0 重新開始。</p>
+    </div>
   );
 }
 

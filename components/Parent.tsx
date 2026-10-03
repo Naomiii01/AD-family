@@ -23,12 +23,18 @@ function FamilyCard({ app }: { app: App }) {
   const [name, setName] = useState(family.name);
   const [rate, setRate] = useState(String(Number(family.rate)));
   const [bonus, setBonus] = useState(String(family.bonus_pct));
+  const [step, setStep] = useState(String(family.bonus_step));
+  const [lmin, setLmin] = useState(String(family.long_min));
+  const [mpct, setMpct] = useState(String(family.match_pct));
+  const [mcap, setMcap] = useState(String(family.match_cap));
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
     const [, e] = await rpc("update_family", { p_name: name, p_rate: +rate, p_bonus: Math.round(+bonus) });
+    if (e) { setBusy(false); return toast(e); }
+    const [, e2] = await rpc("update_family_rules", { p_bonus_step: Math.round(+step), p_bonus_pct: Math.round(+bonus), p_long_min: Math.round(+lmin), p_match_pct: Math.round(+mpct), p_match_cap: Math.round(+mcap) || 0 });
     setBusy(false);
-    if (e) return toast(e);
+    if (e2) return toast(e2);
     toast("已更新家庭設定");
     await reloadBase();
     await data.reload();
@@ -43,11 +49,20 @@ function FamilyCard({ app }: { app: App }) {
       <p className="small muted">家人在登入頁選「家人登入」，輸入這組代碼、選自己的名字，再輸入自己的密碼。</p>
       <h3>家庭銀行規則</h3>
       <label className="f">家庭名稱<input id="f-name" maxLength={30} value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <h3>夢想罐闖關加碼</h3>
       <div className="grid2">
-        <label className="f">長期罐月息（%）<input id="f-rate" type="number" inputMode="decimal" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(e.target.value)} /></label>
-        <label className="f">夢想過半加碼（%）<input id="f-bonus" type="number" inputMode="numeric" min={0} max={50} value={bonus} onChange={(e) => setBonus(e.target.value)} /></label>
+        <label className="f">每存滿多少錢（元）<input id="f-step" type="number" inputMode="numeric" min={100} value={step} onChange={(e) => setStep(e.target.value)} /></label>
+        <label className="f">加碼比例（%）<input id="f-bonus" type="number" inputMode="numeric" min={0} max={50} value={bonus} onChange={(e) => setBonus(e.target.value)} /></label>
       </div>
-      <p className="note">月息是練習用的利率，比真實銀行高，讓孩子幾年內就看得到複利。孩子越大，可以慢慢調低。</p>
+      <p className="note">例：每存滿 {fmt(+step || 0)} 加碼 {+bonus || 0}%，每闖過一關拿 {fmt(((+step || 0) * (+bonus || 0)) / 100)}。月底結算時自動發放；花掉後重新算。</p>
+      <h3>長期罐配對投資</h3>
+      <div className="grid2">
+        <label className="f">孩子每月最少（元）<input id="f-lmin" type="number" inputMode="numeric" min={0} value={lmin} onChange={(e) => setLmin(e.target.value)} /></label>
+        <label className="f">爸媽配對（%）<input id="f-mpct" type="number" inputMode="numeric" min={0} max={300} value={mpct} onChange={(e) => setMpct(e.target.value)} /></label>
+        <label className="f">每月配對上限（0 = 不設上限）<input id="f-mcap" type="number" inputMode="numeric" min={0} value={mcap} onChange={(e) => setMcap(e.target.value)} /></label>
+        <label className="f">家庭銀行月息（%）<input id="f-rate" type="number" inputMode="decimal" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(e.target.value)} /></label>
+      </div>
+      <p className="note">配對 100% 代表孩子放多少、爸媽就加多少。長期罐已經拿去買股票的話，家庭銀行月息可以設成 0。</p>
       <div><button className="btn primary" disabled={busy} onClick={save}>儲存</button></div>
     </section>
   );
@@ -103,21 +118,18 @@ function Advice({ app }: { app: App }) {
         const cur = d.months.find((x: any) => x.month === curMonth());
         if (!cur) tips.push("這個月還沒做月初規劃。");
         const g = d.goal;
-        let canBonus = false;
         if (g) {
           const per = cur?.alloc?.dream || 0;
           const rem = g.price - (d.bal?.dream || 0);
           if (per > 0 && rem > 0 && Math.ceil(rem / per) > 12) tips.push(`夢想「${g.name}」照目前存法要 ${Math.ceil(rem / per)} 個月。可以聊聊打工、做家事賺額外收入，或調整夢想。`);
-          canBonus = !g.bonus_given && (d.bal?.dream || 0) * 2 >= g.price && (d.bal?.dream || 0) < g.price;
         }
-        if (!tips.length && !canBonus) tips.push(closed.length ? "目前狀況穩定，持續觀察。" : "還沒有結算過的月份，月底完成第一次檢討後會出現建議。");
+        if (!tips.length) tips.push(closed.length ? "目前狀況穩定，持續觀察。" : "還沒有結算過的月份，月底完成第一次檢討後會出現建議。");
         return (
           <div className="sug" key={k.id}>
             <div className="card-h"><span className="row"><Avatar m={k} /><b>{k.name}</b></span><span className="small muted num">每月 {fmt(k.allowance)}</span></div>
             <Stars months={d.months} />
             {d.bal && <div className="small muted num">自由 {fmt(d.bal.free)} · 夢想 {fmt(d.bal.dream)} · 長期 {fmt(d.bal.long)}</div>}
             {tips.map((t, i) => <p className="small" key={i}>{t}</p>)}
-            {canBonus && <div><button className="btn primary sm" onClick={() => bonus(k.id)}>發放夢想加碼 {fmt(Math.round((g.price * family.bonus_pct) / 100))}</button></div>}
           </div>
         );
       })}

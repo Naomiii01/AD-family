@@ -1,9 +1,9 @@
 "use client";
 import type { App } from "./Shell";
+import { fmt, stepBonus } from "@/lib/util";
 
 export default function Rules({ app }: { app: App }) {
   const { family } = app;
-  const rate = Number(family.rate);
   return (
     <>
       <section className="card">
@@ -34,9 +34,11 @@ export default function Rules({ app }: { app: App }) {
             <ul className="plain">
               <li>一次只存一個夢想，寫下名稱和價格。</li>
               <li>夢想罐的錢只能用來買這個夢想。</li>
-              <li>存到一半時，爸媽會加碼夢想價格的 {family.bonus_pct}%。</li>
+              <li><b>闖關加碼</b>：夢想罐裡自己存的錢，每存滿 {fmt(family.bonus_step)}，爸媽加碼 {family.bonus_pct}%（{fmt(stepBonus(family))}）。存到 {fmt(family.bonus_step * 2)} 再拿一次，以此類推。</li>
+              <li>加碼在月底結算時發，只看有沒有「新」闖過一關。這個月到 {fmt(family.bonus_step)} 拿到加碼，下個月沒存到 {fmt(family.bonus_step * 2)}，就沒有新的加碼。</li>
+              <li>爸媽給的加碼本身不算進關卡，只算自己存的錢。</li>
+              <li>夢想罐的錢花掉後，關卡從 0 重新開始算。</li>
               <li>想換夢想要先冷靜 7 天，7 天後還是想換再確認。</li>
-              <li>存滿後，在 App 按「買下夢想」，錢會從夢想罐扣掉。</li>
             </ul>
           </div>
         </div>
@@ -46,12 +48,13 @@ export default function Rules({ app }: { app: App }) {
         <div className="rule">
           <span className="ic" style={{ background: "var(--long)" }}>長</span>
           <div className="stack" style={{ gap: 6 }}>
-            <h3 className="k-long">長期罐：留給未來的自己</h3>
+            <h3 className="k-long">長期罐：定期投資，留給未來的自己</h3>
             <ul className="plain">
-              <li>長期罐的錢只進不出，是未來的第一桶金。</li>
-              <li>每月結算時，家庭銀行依長期罐的金額發 {rate}% 利息。</li>
-              <li>利息會加進長期罐，下個月連利息一起再生利息，這就是複利。</li>
-              <li>長大後，這筆錢可以學著拿去做真正的投資。</li>
+              <li>每月至少放 {fmt(family.long_min)} 進長期罐。</li>
+              <li><b>爸媽配對</b>：你放多少，爸媽就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。放 {fmt(family.long_min)}，爸媽加 {fmt(Math.round(family.long_min * family.match_pct / 100))}；放 {fmt(1000)}，爸媽加 {fmt(Math.round(1000 * family.match_pct / 100))}。</li>
+              <li>兩邊加起來的錢，每月定期定額買股票，是未來的第一桶金。</li>
+              <li>長期罐的錢只進不出，股票會有漲有跌，時間拉長才看得出複利的力量。</li>
+              {Number(family.rate) > 0 && <li>家庭銀行另外每月發 {Number(family.rate)}% 利息。</li>}
             </ul>
           </div>
         </div>
@@ -63,7 +66,7 @@ export default function Rules({ app }: { app: App }) {
           <li><b>月初規劃</b>：確認零用金和額外收入，決定三個罐子的比例。</li>
           <li><b>每天記帳</b>：花了錢就記，或用 Apple 捷徑快速記。</li>
           <li><b>每週檢查</b>：週日晚上看看有沒有漏記，自由罐還剩多少。</li>
-          <li><b>月底檢討</b>：回答三個問題、決定結餘去向、領利息。完成檢討就拿到一顆星。</li>
+          <li><b>月底檢討</b>：回答三個問題、決定結餘去向，結算時發夢想加碼。完成檢討就拿到一顆星。</li>
         </ol>
       </section>
 

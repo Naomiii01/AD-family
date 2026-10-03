@@ -53,3 +53,13 @@ export function store(key: string, val?: string) {
   } catch {}
   return "";
 }
+
+/** Parent matching for a kid's long-term deposit. */
+export function matchOf(family: any, role: string, long: number) {
+  if (role !== "kid") return 0;
+  let m = Math.round((long * (family.match_pct ?? 100)) / 100);
+  if (family.match_cap > 0) m = Math.min(m, family.match_cap);
+  return m;
+}
+/** Bonus paid for each full step of dream savings. */
+export const stepBonus = (family: any) => Math.round(((family.bonus_step ?? 5000) * (family.bonus_pct ?? 10)) / 100);

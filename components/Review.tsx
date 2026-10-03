@@ -63,7 +63,8 @@ export default function Review({ app }: { app: App }) {
         <section className="card">
           <div className="card-h"><h3>結算完成</h3><span className={`star ${mo.star ? "" : "off"}`} style={{ fontSize: "1.5rem" }}>★</span></div>
           {mo.moved > 0 && <div className="kv"><span>自由罐結餘轉入{JN[mo.review?.to]}</span><b>{fmt(mo.moved)}</b></div>}
-          <div className="kv"><span>長期罐利息</span><b>{fmt(mo.interest)}</b></div>
+          {mo.alloc?.bonus > 0 && <div className="kv"><span>夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(mo.alloc.bonus)}</b></div>}
+          {mo.interest > 0 && <div className="kv"><span>長期罐利息</span><b>{fmt(mo.interest)}</b></div>}
           {mo.review?.best && <p><span className="muted small">最滿意的花費</span><br />{mo.review.best}</p>}
           {mo.review?.regret && <p><span className="muted small">有點後悔的花費</span><br />{mo.review.regret}</p>}
           {mo.review?.next && <p><span className="muted small">下個月想調整</span><br />{mo.review.next}</p>}
@@ -74,6 +75,9 @@ export default function Review({ app }: { app: App }) {
   const left = data.bal.free;
   const rate = Number(family.rate);
   const after = data.bal.long + (rv.to === "long" ? left : 0);
+  const ownAfter = (data.bal.dream_own || 0) + (rv.to === "dream" ? left : 0);
+  const bonusPreview = sel.role === "kid" && family.bonus_pct > 0
+    ? Math.max(0, Math.floor(ownAfter / family.bonus_step) - (data.bal.dream_tiers || 0)) * Math.round((family.bonus_step * family.bonus_pct) / 100) : 0;
 
   async function save(next = rv) {
     const [, e] = await rpc("save_review", { p_member: sel.id, p_month: mk, p_review: next });
@@ -85,7 +89,7 @@ export default function Review({ app }: { app: App }) {
     const [r, e] = await rpc("close_month", { p_member: sel.id, p_month: mk });
     setBusy(false);
     if (e) return toast(e);
-    toast(r?.star ? "結算完成，拿到一顆星 ★" : "結算完成");
+    toast((r?.star ? "結算完成，拿到一顆星 ★" : "結算完成") + (r?.bonus > 0 ? `，夢想加碼 ${fmt(r.bonus)}` : ""));
     await data.reload();
   }
   const setTo = (to: string) => { const n = { ...rv, to }; setRv(n); save(n); };
@@ -106,7 +110,8 @@ export default function Review({ app }: { app: App }) {
             </div>
           </>
         ) : <p className="small muted">這個月的自由罐剛好用完。</p>}
-        <div className="kv"><span>結算後長期罐利息（月息 {rate}%）</span><b>+{fmt((after * rate) / 100)}</b></div>
+        {rate > 0 && <div className="kv"><span>結算後長期罐利息（月息 {rate}%）</span><b>+{fmt((after * rate) / 100)}</b></div>}
+        {bonusPreview > 0 && <div className="kv"><span>結算時夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(bonusPreview)}</b></div>}
       </section>
       <section className="card">
         <h3>三個問題</h3>

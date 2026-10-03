@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
-import { CATS, JARS, JN, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate } from "@/lib/util";
+import { CATS, JARS, JN, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf } from "@/lib/util";
 import { MonthNav } from "./ui";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
@@ -42,6 +42,20 @@ function Plan({ app }: { app: App }) {
   const a = split(total, r);
   const g = data.goal;
   const openPrev = data.months.find((x) => x.status === "active" && x.month < mk);
+  const isKid = sel.role === "kid";
+  const minLong = isKid ? Math.min(app.family.long_min, total) : 0;
+  const lowLong = a.long < minLong;
+  const match = matchOf(app.family, sel.role, a.long);
+  const fixLong = () => {
+    setR((x) => {
+      const y = { ...x };
+      while (split(total, y).long < minLong && (y.free >= 5 || y.dream >= 5)) {
+        if (y.free >= 5) y.free -= 5; else y.dream -= 5;
+        y.long += 5;
+      }
+      return y;
+    });
+  };
 
   const bump = (k: "dream" | "long", d: number) => {
     setR((x) => {
@@ -84,7 +98,7 @@ function Plan({ app }: { app: App }) {
       <span className="dot" style={{ background: `var(--${k})` }} />
       <div>
         <div className="nm">{JN[k]}</div>
-        <div className="small muted">{k === "free" ? "剩下的都在這裡" : k === "dream" ? "為夢想存" : "只進不出，會生利息"}</div>
+        <div className="small muted">{k === "free" ? "剩下的都在這裡" : k === "dream" ? "為夢想存" : sel.role === "kid" ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資"}</div>
       </div>
       <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
         {k === "free" ? <span className="pct">{r.free}%</span> : (
@@ -119,6 +133,21 @@ function Plan({ app }: { app: App }) {
           <button className="btn sm" onClick={() => setR({ free: 30, dream: 50, long: 20 })}>衝夢想 3:5:2</button>
           <button className="btn sm" onClick={() => setR({ free: 40, dream: 20, long: 40 })}>長期派 4:2:4</button>
         </div>
+        {isKid && (
+          lowLong ? (
+            <div className="banner warn">
+              <span>長期罐每月至少要放 {fmt(minLong)}，現在只有 {fmt(a.long)}。</span>
+              <div><button className="btn sm primary" onClick={fixLong}>調到至少 {fmt(minLong)}</button></div>
+            </div>
+          ) : (
+            <div className="sug">
+              <div className="kv small"><span>你放進長期罐</span><b>{fmt(a.long)}</b></div>
+              <div className="kv small"><span>爸媽配對 {app.family.match_pct}%</span><b style={{ color: "var(--long)" }}>+{fmt(match)}</b></div>
+              <div className="kv"><span>這個月一起投資</span><b>{fmt(a.long + match)}</b></div>
+              <p className="note">長期罐放越多，爸媽配對越多。</p>
+            </div>
+          )
+        )}
         {insight}
       </section>
       {openPrev && (
@@ -127,7 +156,7 @@ function Plan({ app }: { app: App }) {
           <div><button className="btn sm primary" onClick={() => { app.setMk(openPrev.month); app.go("review"); }}>去結算 {mkLabel(openPrev.month)}</button></div>
         </div>
       )}
-      <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev} onClick={confirm}>確認本月規劃，放進罐子</button>
+      <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev || lowLong} onClick={confirm}>確認本月規劃，放進罐子</button>
       <p className="note center">確認後錢會放進三個罐子，這個月的比例就不能再改。</p>
       {sel.allowance === 0 && <p className="note center">零用金目前是 0 元，請家長到「更多 → 家長設定」設定金額。</p>}
     </>
@@ -175,6 +204,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           ))}
         </div>
+        {mo.alloc.match > 0 && <p className="small">爸媽配對投資 <b style={{ color: "var(--long)" }}>+{fmt(mo.alloc.match)}</b>，這個月長期罐一共投資 {fmt(mo.alloc.long + mo.alloc.match)}。</p>}
         {mo.extra > 0 && <p className="note">含額外收入 {fmt(mo.extra)}{mo.extra_note ? `（${mo.extra_note}）` : ""}</p>}
       </section>
 
