@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v1";
+const KEY = "adf-demo-v2";
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
@@ -323,10 +323,10 @@ function seed(): DB {
   db.families.push(fam);
   const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
     db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme, created_at: now() });
-  add("m1", "媽媽", "parent", 6000, "morandi", true);
-  add("m2", "爸爸", "parent", 5000, "earth");
-  add("m3", "哥哥", "kid", 1500, "court");
-  add("m4", "妹妹", "kid", 1200, "kpop");
+  add("m1", "Naomi", "parent", 6000, "morandi", true);
+  add("m2", "Ad", "parent", 5000, "earth");
+  add("m3", "Jalen", "kid", 1500, "court");
+  add("m4", "Rebecca", "kid", 1200, "kpop");
   const prev = shiftMonth(curMonth(), -1), cur = curMonth();
   const as = (mid: string) => (db.uid = mem(mid).user_id);
   const d = (mk: string, day: number) => `${mk}-${String(day).padStart(2, "0")}T04:00:00.000Z`;
@@ -358,7 +358,7 @@ function seed(): DB {
   as("m3");
   F.save_agreement({ p_member: "m3", p_items: [
     "零用金每月 NT$ 1,500，每月 1 日發放。", "每月 1 日前完成月初規劃：長期罐至少 20%，夢想罐至少 20%。",
-    "花了錢當天記帳；每週日晚上檢查一次。", "每月最後一個週末，和爸爸一起完成月底檢討。",
+    "花了錢當天記帳；每週日晚上檢查一次。", "每月最後一個週末，和 Ad 一起完成月底檢討。",
     "遊戲點數從自由罐出，一個月最多 NT$ 100。", "連續 3 個月拿到星星，可以提出調高零用金。"] });
   F.sign_agreement({ p_member: "m3" });
   F.save_year_plan({ p_member: "m3", p_year: +cur.slice(0, 4), p_data: { target_long: 6000, wishes: "新籃球鞋\n暑假籃球營", incomes: [{ name: "過年紅包", month: 2, amount: 6000 }], spends: [{ name: "暑假籃球營", month: 7, amount: 3500 }], reflection: "" } });
