@@ -170,7 +170,7 @@ export default function Login() {
           <p className="small muted">第一次使用：由一位家長建立家庭，之後再把其他家人加進來。</p>
           <div className="grid2">
             <label className="f">家庭名稱<input id="fam" placeholder="例如：林家" value={famName} onChange={(e) => setFamName(e.target.value)} /></label>
-            <label className="f">你的稱呼<input id="me" placeholder="例如：媽媽" value={myName} onChange={(e) => setMyName(e.target.value)} /></label>
+            <label className="f">你的稱呼<input id="me" placeholder="例如：Naomi" value={myName} onChange={(e) => setMyName(e.target.value)} /></label>
           </div>
           <label className="f">Email<input id="em2" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           <label className="f">密碼（至少 8 個字元）<input id="pw2" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>

@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v4";
+const KEY = "adf-demo-v5";
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
@@ -78,7 +78,7 @@ const F: Record<string, (a: any) => any> = {
       if (fam.match_cap > 0) match = Math.min(match, fam.match_cap);
     }
     (["free", "dream", "long"] as const).forEach((j) => log(p_member, j, a[j], label(p_month), p_month, "allowance"));
-    log(p_member, "long", match, "爸爸配對投資", p_month, "match");
+    log(p_member, "long", match, fam.guardian + "配對投資", p_month, "match");
     (a as any).match = match;
     db.months.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, month: p_month, status: "active", income: mem(p_member).allowance,
       extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio: { free: p_free, dream: p_dream, long: p_long }, alloc: a,
@@ -147,6 +147,11 @@ const F: Record<string, (a: any) => any> = {
     log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
     Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
     Object.assign(mem(p_member), { dream_tiers: 0, dream_reset_at: now() });
+  },
+  set_guardian: ({ p_label }) => {
+    if (!amParent()) fail("只有家長可以做這件事");
+    if (!(p_label || "").trim() || p_label.trim().length > 10) fail("稱呼要在 10 個字以內");
+    db.families.find((f) => f.id === myFam()).guardian = p_label.trim();
   },
   update_family_rules: ({ p_bonus_step, p_bonus_pct, p_long_min, p_match_pct, p_match_cap }) => {
     if (!amParent()) fail("只有家長可以做這件事");
@@ -354,7 +359,7 @@ export function demoReset() {
 
 function seed(): DB {
   db = blank();
-  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, created_at: now() };
+  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", created_at: now() };
   db.families.push(fam);
   const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
     db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme, created_at: now() });

@@ -63,3 +63,6 @@ export function matchOf(family: any, role: string, long: number) {
 }
 /** Bonus paid for each full step of dream savings. */
 export const stepBonus = (family: any) => Math.round(((family.bonus_step ?? 5000) * (family.bonus_pct ?? 10)) / 100);
+
+/** What the kids call the parent who sets the rules (爸爸, 媽媽, 爸媽, 阿嬤...). */
+export const gd = (family: any) => (family?.guardian || "家長");

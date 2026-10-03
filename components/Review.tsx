@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
-import { JN, fmt, mkLabel } from "@/lib/util";
+import { JN, fmt, mkLabel, gd } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
 
@@ -124,7 +124,7 @@ export default function Review({ app }: { app: App }) {
         <p className="note">回答第 3 題，再加上第 1 或第 2 題，就能拿到本月的星星 ★</p>
       </section>
       <Confirm label="完成本月結算" confirmLabel="確定結算" className="btn primary big" disabled={busy} onConfirm={close} />
-      <p className="note center">結算後這個月就不能再記帳或修改。建議和爸媽一起完成。</p>
+      <p className="note center">結算後這個月就不能再記帳或修改。建議和{gd(family)}一起完成。</p>
     </>
   );
 }

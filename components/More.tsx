@@ -7,6 +7,7 @@ import Rules from "./Rules";
 import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
 import { SKINS, SkinKey, skinOf } from "@/lib/themes";
+import { gd } from "@/lib/util";
 
 export default function More({ app }: { app: App }) {
   const { sub, go, isParent, sel, me, isSelf } = app;
@@ -27,7 +28,7 @@ export default function More({ app }: { app: App }) {
   }
   const who = isSelf ? "" : `（${sel.name}）`;
   const items: [string, string, string, string, string][] = [
-    ["agreement", "約", "dream", "理財約定" + who, "孩子和爸媽一起訂的用錢規則，雙方簽名"],
+    ["agreement", "約", "dream", "理財約定" + who, `孩子和${gd(app.family)}一起訂的用錢規則，雙方簽名`],
     ["rules", "則", "long", "罐子使用原則", "三個罐子怎麼用、家庭銀行和夢想加碼"],
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];

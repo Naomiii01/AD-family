@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
-import { fmt } from "@/lib/util";
+import { fmt, gd } from "@/lib/util";
 import { Confirm } from "./ui";
 
 function template(app: App): string[] {
@@ -10,12 +10,12 @@ function template(app: App): string[] {
   return [
     `零用金每月 ${fmt(sel.allowance)}，每月 1 日發放。`,
     `每月 1 日前完成月初規劃；長期罐每月至少 ${fmt(family.long_min)}。`,
-    `長期罐放多少，爸爸就配對 ${family.match_pct}%，一起每月定期買股票；18 歲前不提領。`,
-    `夢想罐自己存的錢每存滿 ${fmt(family.bonus_step)}，月底結算時爸爸加碼 ${family.bonus_pct}%；花掉後從 0 重新算。`,
+    `長期罐放多少，${gd(family)}就配對 ${family.match_pct}%，一起每月定期買股票；18 歲前不提領。`,
+    `夢想罐自己存的錢每存滿 ${fmt(family.bonus_step)}，月底結算時${gd(family)}加碼 ${family.bonus_pct}%；花掉後從 0 重新算。`,
     "花了錢當天記帳；每週日晚上檢查一次有沒有漏記。",
-    "每月最後一個週末，和爸爸或媽媽一起完成月底檢討。",
-    "買超過 NT$ 1,000 的東西前，先和爸媽討論。",
-    "連續 3 個月拿到星星，可以提出調高零用金，和爸媽一起討論。",
+    `每月最後一個週末，和${gd(family)}一起完成月底檢討。`,
+    `買超過 NT$ 1,000 的東西前，先和${gd(family)}討論。`,
+    `連續 3 個月拿到星星，可以提出調高零用金，和${gd(family)}一起討論。`,
   ];
 }
 
@@ -65,7 +65,7 @@ export default function Agreement({ app }: { app: App }) {
   }
 
   const signerName = members.find((m) => m.id === ag?.parent_signer)?.name || "家長";
-  const parentLabel = isParent ? me.name : "爸爸或媽媽";
+  const parentLabel = isParent ? me.name : gd(app.family);
 
   return (
     <>

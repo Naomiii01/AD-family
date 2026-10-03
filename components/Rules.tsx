@@ -1,6 +1,6 @@
 "use client";
 import type { App } from "./Shell";
-import { fmt, stepBonus } from "@/lib/util";
+import { fmt, stepBonus, gd } from "@/lib/util";
 
 export default function Rules({ app }: { app: App }) {
   const { family } = app;
@@ -34,9 +34,9 @@ export default function Rules({ app }: { app: App }) {
             <ul className="plain">
               <li>一次只存一個夢想，寫下名稱和價格。</li>
               <li>夢想罐的錢只能用來買這個夢想。</li>
-              <li><b>闖關加碼</b>：夢想罐裡自己存的錢，每存滿 {fmt(family.bonus_step)}，爸爸加碼 {family.bonus_pct}%（{fmt(stepBonus(family))}）。存到 {fmt(family.bonus_step * 2)} 再拿一次，以此類推。</li>
+              <li><b>闖關加碼</b>：夢想罐裡自己存的錢，每存滿 {fmt(family.bonus_step)}，{gd(family)}加碼 {family.bonus_pct}%（{fmt(stepBonus(family))}）。存到 {fmt(family.bonus_step * 2)} 再拿一次，以此類推。</li>
               <li>加碼在月底結算時發，只看有沒有「新」闖過一關。這個月到 {fmt(family.bonus_step)} 拿到加碼，下個月沒存到 {fmt(family.bonus_step * 2)}，就沒有新的加碼。</li>
-              <li>爸爸給的加碼本身不算進關卡，只算自己存的錢。</li>
+              <li>{gd(family)}給的加碼本身不算進關卡，只算自己存的錢。</li>
               <li>夢想罐的錢花掉後，關卡從 0 重新開始算。</li>
               <li>想換夢想要先冷靜 7 天，7 天後還是想換再確認。</li>
             </ul>
@@ -51,7 +51,7 @@ export default function Rules({ app }: { app: App }) {
             <h3 className="k-long">長期罐：定期投資，留給未來的自己</h3>
             <ul className="plain">
               <li>每月至少放 {fmt(family.long_min)} 進長期罐。</li>
-              <li><b>爸爸配對</b>：你放多少，爸爸就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。放 {fmt(family.long_min)}，爸爸加 {fmt(Math.round(family.long_min * family.match_pct / 100))}；放 {fmt(1000)}，爸爸加 {fmt(Math.round(1000 * family.match_pct / 100))}。</li>
+              <li><b>{gd(family)}配對</b>：你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。放 {fmt(family.long_min)}，{gd(family)}加 {fmt(Math.round(family.long_min * family.match_pct / 100))}；放 {fmt(1000)}，{gd(family)}加 {fmt(Math.round(1000 * family.match_pct / 100))}。</li>
               <li>兩邊加起來的錢，每月定期定額買股票，是未來的第一桶金。</li>
               <li>長期罐的錢只進不出，股票會有漲有跌，時間拉長才看得出複利的力量。</li>
               {Number(family.rate) > 0 && <li>家庭銀行另外每月發 {Number(family.rate)}% 利息。</li>}

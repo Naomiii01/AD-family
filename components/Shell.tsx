@@ -53,7 +53,7 @@ export default function Shell({ userId }: { userId: string }) {
     if (error) return setFatal("連線失敗，請檢查網路後重新整理");
     if (!m) return setFatal("這個帳號找不到家庭資料，可能已被家長移除。");
     const [{ data: f }, { data: ms }] = await Promise.all([
-      supabase.from("families").select("id,name,code,rate,bonus_pct,bonus_step,long_min,match_pct,match_cap").eq("id", m.family_id).single(),
+      supabase.from("families").select("id,name,code,rate,bonus_pct,bonus_step,long_min,match_pct,match_cap,guardian").eq("id", m.family_id).single(),
       supabase.from("members").select(MEMBER_COLS).eq("archived", false).order("created_at"),
     ]);
     const list = (ms || []).sort((a, b) => (a.id === m.id ? -1 : b.id === m.id ? 1 : a.role === b.role ? 0 : a.role === "kid" ? 1 : -1));
@@ -118,7 +118,7 @@ export default function Shell({ userId }: { userId: string }) {
         {welcome && isParent && (
           <div className="banner" style={{ marginBottom: 14 }}>
             <b>家庭建立好了！</b>
-            <span>家庭代碼是 <span className="code">{welcome}</span>。接下來到「更多 → 家長設定」把爸爸和孩子加進來，並幫每個人設定登入密碼。</span>
+            <span>家庭代碼是 <span className="code">{welcome}</span>。接下來到「更多 → 家長設定」把其他家人和孩子加進來，並幫每個人設定登入密碼。</span>
             <div className="row">
               <button className="btn sm primary" onClick={() => { store("adf.welcome", ""); setWelcome(""); go("more", "parent"); }}>去新增家人</button>
               <button className="btn sm ghost" onClick={() => { store("adf.welcome", ""); setWelcome(""); }}>知道了</button>

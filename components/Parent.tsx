@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc, fn } from "@/lib/supabase";
-import { JN, fmt, curMonth } from "@/lib/util";
+import { JN, fmt, curMonth, gd } from "@/lib/util";
 import { SKINS, SkinKey } from "@/lib/themes";
 import { Avatar, Confirm, copyText, Stars } from "./ui";
 
@@ -27,14 +27,17 @@ function FamilyCard({ app }: { app: App }) {
   const [lmin, setLmin] = useState(String(family.long_min));
   const [mpct, setMpct] = useState(String(family.match_pct));
   const [mcap, setMcap] = useState(String(family.match_cap));
+  const [guard, setGuard] = useState(gd(family));
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
     const [, e] = await rpc("update_family", { p_name: name, p_rate: +rate, p_bonus: Math.round(+bonus) });
     if (e) { setBusy(false); return toast(e); }
     const [, e2] = await rpc("update_family_rules", { p_bonus_step: Math.round(+step), p_bonus_pct: Math.round(+bonus), p_long_min: Math.round(+lmin), p_match_pct: Math.round(+mpct), p_match_cap: Math.round(+mcap) || 0 });
+    if (e2) { setBusy(false); return toast(e2); }
+    const [, e3] = await rpc("set_guardian", { p_label: guard });
     setBusy(false);
-    if (e2) return toast(e2);
+    if (e3) return toast(e3);
     toast("已更新家庭設定");
     await reloadBase();
     await data.reload();
@@ -49,6 +52,12 @@ function FamilyCard({ app }: { app: App }) {
       <p className="small muted">家人在登入頁選「家人登入」，輸入這組代碼、選自己的名字，再輸入自己的密碼。</p>
       <h3>家庭銀行規則</h3>
       <label className="f">家庭名稱<input id="f-name" maxLength={30} value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <h3>孩子怎麼稱呼負責的家長</h3>
+      <div className="chips">
+        {["爸爸", "媽媽", "爸媽", "家長"].map((x) => <button key={x} className={`chip ${guard === x ? "on" : ""}`} onClick={() => setGuard(x)}>{x}</button>)}
+      </div>
+      <label className="f">或自己輸入（例如：阿嬤、Ad）<input id="f-guard" maxLength={10} value={guard} onChange={(e) => setGuard(e.target.value)} /></label>
+      <p className="note">App 裡的加碼、配對、理財約定和檢討提醒，都會用這個稱呼。</p>
       <h3>夢想罐闖關加碼</h3>
       <div className="grid2">
         <label className="f">每存滿多少錢（元）<input id="f-step" type="number" inputMode="numeric" min={100} value={step} onChange={(e) => setStep(e.target.value)} /></label>
@@ -58,11 +67,11 @@ function FamilyCard({ app }: { app: App }) {
       <h3>長期罐配對投資</h3>
       <div className="grid2">
         <label className="f">孩子每月最少（元）<input id="f-lmin" type="number" inputMode="numeric" min={0} value={lmin} onChange={(e) => setLmin(e.target.value)} /></label>
-        <label className="f">爸爸配對（%）<input id="f-mpct" type="number" inputMode="numeric" min={0} max={300} value={mpct} onChange={(e) => setMpct(e.target.value)} /></label>
+        <label className="f">{gd(family)}配對（%）<input id="f-mpct" type="number" inputMode="numeric" min={0} max={300} value={mpct} onChange={(e) => setMpct(e.target.value)} /></label>
         <label className="f">每月配對上限（0 = 不設上限）<input id="f-mcap" type="number" inputMode="numeric" min={0} value={mcap} onChange={(e) => setMcap(e.target.value)} /></label>
         <label className="f">家庭銀行月息（%）<input id="f-rate" type="number" inputMode="decimal" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(e.target.value)} /></label>
       </div>
-      <p className="note">配對 100% 代表孩子放多少、爸爸就加多少。長期罐已經拿去買股票的話，家庭銀行月息可以設成 0。</p>
+      <p className="note">配對 100% 代表孩子放多少、{gd(family)}就加多少。長期罐已經拿去買股票的話，家庭銀行月息可以設成 0。</p>
       <div><button className="btn primary" disabled={busy} onClick={save}>儲存</button></div>
     </section>
   );
@@ -268,7 +277,7 @@ function AddMember({ app }: { app: App }) {
     <section className="card">
       <h2>新增家人</h2>
       <div className="grid2">
-        <label className="f">名字<input id="n-name" maxLength={20} placeholder="例如：爸爸、哥哥" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label className="f">名字<input id="n-name" maxLength={20} placeholder="例如：家人的名字" value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="f">身分<select id="n-role" value={role} onChange={(e) => setRole(e.target.value)}><option value="kid">孩子</option><option value="parent">家長（看得到全家）</option></select></label>
         <label className="f">每月零用金<input id="n-allow" type="number" inputMode="numeric" min={0} placeholder="1500" value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
       </div>

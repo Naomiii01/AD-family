@@ -460,3 +460,7 @@ alter table public.families
 alter table public.members
   add column if not exists dream_tiers int not null default 0,
   add column if not exists dream_reset_at timestamptz not null default '2000-01-01';
+
+-- ---------- what kids call the parent who sets the rules ----------
+alter table public.families add column if not exists guardian text not null default '家長';
+-- set_guardian(p_label) is parent-only; plan_month logs the match as guardian || '配對投資'.
