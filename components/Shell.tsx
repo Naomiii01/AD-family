@@ -4,6 +4,7 @@ import { supabase, MEMBER_COLS } from "@/lib/supabase";
 import { curMonth, store } from "@/lib/util";
 import { useMember, MemberData } from "@/lib/useMember";
 import { Avatar, ICONS } from "./ui";
+import { SKINS, skinOf, applySkin } from "@/lib/themes";
 import Jars from "./Jars";
 import Month from "./Month";
 import Review from "./Review";
@@ -68,6 +69,8 @@ export default function Shell({ userId }: { userId: string }) {
     if (w) setWelcome(w);
   }, [reloadBase]);
 
+  useEffect(() => { applySkin(skinOf(me)); return () => applySkin("morandi"); }, [me?.theme]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const sel = members.find((x) => x.id === selId) || me;
   const data = useMember(sel?.id);
 
@@ -95,7 +98,7 @@ export default function Shell({ userId }: { userId: string }) {
       <div className="wrap">
         <header className="top">
           <div className="brand">
-            <span className="logo"><b>三</b><i>罐</i><u>零用金</u></span>
+            <span className="row" style={{ gap: 6 }}>{SKINS[skinOf(me)].motif}<span className="logo"><b>三</b><i>罐</i><u>零用金</u></span></span>
             <span className="small muted">{family.name}</span>
           </div>
           {isParent && members.length > 1 && (

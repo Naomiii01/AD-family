@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { SKINS, skinOf } from "@/lib/themes";
 import { clamp, mkLabel, shiftMonth, curMonth } from "@/lib/util";
 
 export function JarSVG({ kind, pct }: { kind: string; pct: number }) {
@@ -23,8 +24,8 @@ export function JarSVG({ kind, pct }: { kind: string; pct: number }) {
   );
 }
 
-export function Avatar({ m, lg }: { m: { name: string; color: string }; lg?: boolean }) {
-  return <span className={`av av-${m.color || "ink"} ${lg ? "lg" : ""}`}>{(m.name || "?").slice(0, 1)}</span>;
+export function Avatar({ m, lg }: { m: { name: string; theme?: string }; lg?: boolean }) {
+  return <span className={`av ${lg ? "lg" : ""}`} style={{ background: SKINS[skinOf(m)].accent }}>{(m.name || "?").slice(0, 1)}</span>;
 }
 
 export function Stars({ months }: { months: any[] }) {

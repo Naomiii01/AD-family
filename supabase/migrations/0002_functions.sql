@@ -434,3 +434,17 @@ grant execute on function public.family_roster(text) to anon, authenticated;
 grant execute on function public.verify_pin(text, uuid, text), public.create_family_for(uuid, text, text),
   public.admin_add_member(uuid, text, text, int, text, text), public.admin_link_user(uuid, uuid),
   public.quick_add(text, text, int, text, text) to service_role;
+
+-- ---------- personal colour theme ----------
+alter table public.members add column if not exists theme text not null default 'morandi'
+  check (theme in ('morandi', 'court', 'kpop', 'earth'));
+grant select (theme) on public.members to authenticated;
+create or replace function public.set_theme(p_member uuid, p_theme text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public._need_access(p_member);
+  if p_theme not in ('morandi', 'court', 'kpop', 'earth') then raise exception '主題不正確'; end if;
+  update public.members set theme = p_theme where id = p_member;
+end $$;
+revoke execute on function public.set_theme(uuid, text) from public, anon;
+grant execute on function public.set_theme(uuid, text) to authenticated;

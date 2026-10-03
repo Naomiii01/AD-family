@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { supabase, rpc } from "./supabase";
+import { supabase, rpc } from "@/lib/supabase";
 
 export type MemberData = {
   loaded: boolean;

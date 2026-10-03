@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, QUICK_URL } from "@/lib/supabase";
 import { copyText, Confirm } from "./ui";
+import { IS_DEMO } from "@/lib/util";
 
 const DAYS = [["SU", "週日"], ["MO", "週一"], ["TU", "週二"], ["WE", "週三"], ["TH", "週四"], ["FR", "週五"], ["SA", "週六"]];
 
@@ -103,7 +104,7 @@ export default function QuickSetup({ app }: { app: App }) {
       <section className="card">
         <h3>Android 或不想設定捷徑</h3>
         <p className="small">用手機瀏覽器打開 <b>{origin}/quick</b>，按「分享 → 加入主畫面」，就有一個打開即記帳的圖示。</p>
-        <div className="row"><a className="btn sm" href="/quick">打開快速記帳頁</a></div>
+        {!IS_DEMO && <div className="row"><a className="btn sm" href="/quick">打開快速記帳頁</a></div>}
       </section>
 
       <section className="card">
@@ -114,7 +115,8 @@ export default function QuickSetup({ app }: { app: App }) {
           <label className="f">幾點<input id="r-time" type="time" value={time} onChange={(e) => setTime(e.target.value || "20:00")} /></label>
         </div>
         <label className="row small"><input type="checkbox" style={{ width: "auto" }} checked={monthly} onChange={(e) => setMonthly(e.target.checked)} />一起加上月初規劃、月底檢討提醒</label>
-        <a className="btn primary" href={icsHref} download="三罐零用金提醒.ics">加到行事曆</a>
+        {IS_DEMO ? <p className="banner small">體驗版不能下載行事曆檔。正式版部署後，按這裡就會加到手機行事曆。</p>
+          : <a className="btn primary" href={icsHref} download="三罐零用金提醒.ics">加到行事曆</a>}
         <p className="note">iPhone 會跳出「加入行事曆」的畫面，按「全部加入」。Android 會用 Google 日曆打開。</p>
       </section>
 

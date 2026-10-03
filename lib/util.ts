@@ -1,3 +1,4 @@
+export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 export type Jar = "free" | "dream" | "long";
 export const JARS: Jar[] = ["free", "dream", "long"];
 export const JN: Record<string, string> = { free: "自由罐", dream: "夢想罐", long: "長期罐", keep: "自由罐" };

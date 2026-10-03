@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc, fn } from "@/lib/supabase";
-import { COLORS, JN, fmt, curMonth } from "@/lib/util";
+import { JN, fmt, curMonth } from "@/lib/util";
+import { SKINS, SkinKey } from "@/lib/themes";
 import { Avatar, Confirm, copyText, Stars } from "./ui";
 
 export default function Parent({ app }: { app: App }) {
@@ -177,14 +178,18 @@ function MemberRow({ app, m }: { app: App; m: any }) {
   const [name, setName] = useState(m.name);
   const [role, setRole] = useState(m.role);
   const [allow, setAllow] = useState(String(m.allowance));
-  const [color, setColor] = useState(m.color);
+  const [theme, setTheme] = useState(m.theme || "morandi");
   const [pin, setPin] = useState("");
   const [open, setOpen] = useState(false);
-  const dirty = name !== m.name || role !== m.role || +allow !== m.allowance || color !== m.color;
+  const dirty = name !== m.name || role !== m.role || +allow !== m.allowance || theme !== (m.theme || "morandi");
 
   async function save() {
-    const [, e] = await rpc("update_member", { p_id: m.id, p_name: name, p_role: role, p_allowance: Math.round(+allow) || 0, p_color: color });
+    const [, e] = await rpc("update_member", { p_id: m.id, p_name: name, p_role: role, p_allowance: Math.round(+allow) || 0, p_color: m.color });
     if (e) return toast(e);
+    if (theme !== (m.theme || "morandi")) {
+      const [, e2] = await rpc("set_theme", { p_member: m.id, p_theme: theme });
+      if (e2) return toast(e2);
+    }
     toast("已更新");
     await reloadBase();
   }
@@ -204,7 +209,7 @@ function MemberRow({ app, m }: { app: App; m: any }) {
   return (
     <div className="sug">
       <button className="row" style={{ border: 0, background: "transparent", padding: 0, justifyContent: "space-between", width: "100%" }} onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="row"><Avatar m={{ name, color }} /><b>{m.name}</b><span className="small muted">{m.role === "parent" ? "家長" : "孩子"} · 每月 {fmt(m.allowance)}</span></span>
+        <span className="row"><Avatar m={{ name, theme }} /><b>{m.name}</b><span className="small muted">{m.role === "parent" ? "家長" : "孩子"} · 每月 {fmt(m.allowance)}</span></span>
         <span className="muted">{open ? "收起" : "編輯"}</span>
       </button>
       {open && (
@@ -213,7 +218,7 @@ function MemberRow({ app, m }: { app: App; m: any }) {
             <label className="f">名字<input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} /></label>
             <label className="f">身分<select value={role} disabled={m.is_owner} onChange={(e) => setRole(e.target.value)}><option value="kid">孩子</option><option value="parent">家長</option></select></label>
             <label className="f">每月零用金<input type="number" inputMode="numeric" min={0} value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
-            <label className="f">顏色<select value={color} onChange={(e) => setColor(e.target.value)}>{COLORS.map((c) => <option key={c} value={c}>{({ free: "黃", dream: "粉紅", long: "綠", sky: "藍", ink: "灰" } as any)[c]}</option>)}</select></label>
+            <label className="f">畫面主題<select value={theme} onChange={(e) => setTheme(e.target.value)}>{(Object.keys(SKINS) as SkinKey[]).map((k) => <option key={k} value={k}>{SKINS[k].name}</option>)}</select></label>
           </div>
           <div><button className="btn primary sm" disabled={!dirty} onClick={save}>儲存變更</button></div>
           <div className="grid2" style={{ alignItems: "end" }}>
@@ -234,12 +239,11 @@ function AddMember({ app }: { app: App }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("kid");
   const [allow, setAllow] = useState("");
-  const [color, setColor] = useState("sky");
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   async function add() {
     setBusy(true);
-    const [, e] = await fn("members", { name, role, allowance: Math.round(+allow) || 0, color, pin });
+    const [, e] = await fn("members", { name, role, allowance: Math.round(+allow) || 0, color: "sky", pin });
     setBusy(false);
     if (e) return toast(e);
     toast(`已新增 ${name}，請把家庭代碼和密碼告訴他`);
@@ -255,7 +259,6 @@ function AddMember({ app }: { app: App }) {
         <label className="f">名字<input id="n-name" maxLength={20} placeholder="例如：爸爸、哥哥" value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="f">身分<select id="n-role" value={role} onChange={(e) => setRole(e.target.value)}><option value="kid">孩子</option><option value="parent">家長（看得到全家）</option></select></label>
         <label className="f">每月零用金<input id="n-allow" type="number" inputMode="numeric" min={0} placeholder="1500" value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
-        <label className="f">顏色<select id="n-color" value={color} onChange={(e) => setColor(e.target.value)}>{COLORS.map((c) => <option key={c} value={c}>{({ free: "黃", dream: "粉紅", long: "綠", sky: "藍", ink: "灰" } as any)[c]}</option>)}</select></label>
       </div>
       <label className="f">登入密碼（{role === "parent" ? "家長 6–8" : "孩子 4–8"} 位數字）<input id="n-pin" type="password" inputMode="numeric" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} /></label>
       <div><button className="btn primary" disabled={busy || !name.trim() || pin.length < (role === "parent" ? 6 : 4)} onClick={add}>{busy ? "新增中…" : "新增"}</button></div>

@@ -1,0 +1,369 @@
+// 體驗版 data layer: same API surface as lib/supabase.ts, backed by this device's storage.
+// Mirrors the database functions in supabase/migrations so the demo behaves like the real app.
+import { curMonth, shiftMonth } from "@/lib/util";
+
+export const SUPABASE_URL = "https://example.invalid";
+export const QUICK_URL = "（正式版部署後才會有網址）";
+export const MEMBER_COLS = "*";
+const KEY = "adf-demo-v1";
+
+type Row = Record<string, any>;
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
+
+let db: DB = blank();
+const listeners: ((e: string, s: any) => void)[] = [];
+
+function blank(): DB {
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], seq: 1, uid: null };
+}
+function load(): DB {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return seed();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
+}
+const id = () => "x" + (db.seq++).toString(36) + Math.random().toString(36).slice(2, 6);
+const now = () => new Date().toISOString();
+class Fail extends Error {}
+const fail = (m: string): never => { throw new Fail(m); };
+
+// ---------- access helpers (same rules as can_access / am_parent) ----------
+const meRow = () => db.members.find((m) => m.user_id === db.uid && !m.archived);
+const myFam = () => meRow()?.family_id;
+const amParent = () => meRow()?.role === "parent";
+const mem = (mid: string) => db.members.find((m) => m.id === mid);
+function canAccess(mid: string) {
+  const m = mem(mid);
+  if (!m) return false;
+  return m.user_id === db.uid || (m.family_id === myFam() && amParent());
+}
+const needAccess = (mid: string) => { if (!canAccess(mid)) fail("沒有權限"); };
+const needParentOf = (mid: string) => { if (!(amParent() && mem(mid)?.family_id === myFam())) fail("只有家長可以做這件事"); };
+const bal = (mid: string, jar: string) => db.ledger.filter((l) => l.member_id === mid && l.jar === jar).reduce((s, l) => s + l.amount, 0);
+function log(mid: string, jar: string, amount: number, note: string, month: string, kind: string, at?: string) {
+  if (!amount) return;
+  db.ledger.push({ id: db.seq++, family_id: mem(mid).family_id, member_id: mid, jar, amount, note: note.slice(0, 60), month, kind, created_at: at || now() });
+}
+const label = (mk: string) => `${mk.slice(0, 4)} 年 ${+mk.slice(5)} 月零用金`;
+
+// ---------- functions ----------
+const F: Record<string, (a: any) => any> = {
+  family_roster: () => [],
+  balances: ({ p_member }) => {
+    needAccess(p_member);
+    const ex = db.expenses.filter((e) => e.member_id === p_member && !e.voided).map((e) => e.created_at).sort();
+    return { free: bal(p_member, "free"), dream: bal(p_member, "dream"), long: bal(p_member, "long"), last_expense: ex[ex.length - 1] || null };
+  },
+  plan_month: ({ p_member, p_month, p_extra, p_extra_note, p_free, p_dream, p_long }) => {
+    needAccess(p_member);
+    if (p_free + p_dream + p_long !== 100 || p_free < 0 || p_dream < 0 || p_long < 0) fail("三個罐子的比例加起來要是 100%");
+    if (p_month > shiftMonth(curMonth(), 1)) fail("只能規劃本月或下個月");
+    if (db.months.some((m) => m.member_id === p_member && m.month === p_month)) fail("這個月已經規劃過了");
+    const open = db.months.filter((m) => m.member_id === p_member && m.status === "active" && m.month < p_month).sort((a, b) => (a.month < b.month ? -1 : 1))[0];
+    if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
+    const total = mem(p_member).allowance + (p_extra || 0);
+    const a = { free: Math.round((total * p_free) / 100), dream: Math.round((total * p_dream) / 100), long: 0 };
+    a.long = Math.max(0, total - a.free - a.dream);
+    (["free", "dream", "long"] as const).forEach((j) => log(p_member, j, a[j], label(p_month), p_month, "allowance"));
+    db.months.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, month: p_month, status: "active", income: mem(p_member).allowance,
+      extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio: { free: p_free, dream: p_dream, long: p_long }, alloc: a,
+      free_start: bal(p_member, "free"), review: {}, interest: 0, moved: 0, star: false, created_at: now() });
+  },
+  add_expense: (a) => { needAccess(a.p_member); return addExpense(a, "app"); },
+  delete_expense: ({ p_id }) => {
+    const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
+    needAccess(e.member_id);
+    if (!db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    e.voided = true;
+    log(e.member_id, "free", e.amount, "刪除：" + e.item, e.month, "refund");
+  },
+  save_review: ({ p_member, p_month, p_review }) => {
+    needAccess(p_member);
+    const m = db.months.find((x) => x.member_id === p_member && x.month === p_month && x.status === "active") || fail("這個月不能再修改檢討");
+    m.review = { best: (p_review.best || "").slice(0, 300), regret: (p_review.regret || "").slice(0, 300), next: (p_review.next || "").slice(0, 300),
+      to: ["keep", "dream", "long"].includes(p_review.to) ? p_review.to : "keep" };
+  },
+  close_month: ({ p_member, p_month }) => {
+    needAccess(p_member);
+    const m = db.months.find((x) => x.member_id === p_member && x.month === p_month && x.status === "active") || fail("這個月不能結算");
+    const to = m.review?.to || "keep";
+    let left = bal(p_member, "free");
+    if (left > 0 && (to === "dream" || to === "long")) { log(p_member, "free", -left, "月底轉存", p_month, "move"); log(p_member, to, left, "自由罐結餘轉入", p_month, "move"); } else left = 0;
+    const rate = db.families.find((f) => f.id === mem(p_member).family_id).rate;
+    const it = Math.round((bal(p_member, "long") * rate) / 100);
+    log(p_member, "long", it, `家庭銀行利息 ${rate}%`, p_month, "interest");
+    const r = m.review || {};
+    const star = !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
+    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now() });
+    return { star, interest: it, moved: left };
+  },
+  set_goal: ({ p_member, p_name, p_price }) => {
+    needAccess(p_member);
+    if (!(p_name || "").trim() || p_name.trim().length > 30) fail("夢想名稱要在 30 字以內");
+    if (!(p_price > 0)) fail("請輸入正確的價格");
+    const g = activeGoal(p_member);
+    if (g) { Object.assign(g, { pending_name: p_name.trim(), pending_price: p_price, pending_at: now() }); return "pending"; }
+    db.goals.push({ id: id(), family_id: mem(p_member).family_id, member_id: p_member, name: p_name.trim(), price: p_price, status: "active", bonus_given: false, created_at: now() });
+    return "set";
+  },
+  apply_goal_change: ({ p_member }) => {
+    needAccess(p_member);
+    const g = activeGoal(p_member);
+    if (!g?.pending_at) fail("沒有等待中的更換");
+    const override = amParent() && meRow().id !== p_member;
+    if (Date.now() - new Date(g.pending_at).getTime() < 7 * 864e5 && !override) fail("冷靜期還沒結束");
+    Object.assign(g, { name: g.pending_name, price: g.pending_price, bonus_given: false, pending_name: null, pending_price: null, pending_at: null });
+  },
+  cancel_goal_change: ({ p_member }) => { needAccess(p_member); const g = activeGoal(p_member); if (g) Object.assign(g, { pending_name: null, pending_price: null, pending_at: null }); },
+  buy_goal: ({ p_member }) => {
+    needAccess(p_member);
+    const g = activeGoal(p_member) || fail("還沒有設定夢想");
+    if (bal(p_member, "dream") < g.price) fail("夢想罐還不夠");
+    log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
+    Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
+  },
+  give_bonus: ({ p_member }) => {
+    needParentOf(p_member);
+    const g = activeGoal(p_member);
+    if (!g || g.bonus_given) fail("目前沒有可以發放的加碼");
+    if (bal(p_member, "dream") * 2 < g.price) fail("夢想還沒存到一半");
+    const amt = Math.round((g.price * db.families.find((f) => f.id === g.family_id).bonus_pct) / 100);
+    log(p_member, "dream", amt, "爸媽夢想加碼", curMonth(), "bonus");
+    g.bonus_given = true;
+    return amt;
+  },
+  give_reward: ({ p_member, p_jar, p_amount, p_note }) => {
+    needParentOf(p_member);
+    if (!(p_amount > 0)) fail("請輸入正確的金額");
+    log(p_member, p_jar, p_amount, (p_note || "").trim() || "獎勵", curMonth(), "reward");
+  },
+  update_member: ({ p_id, p_name, p_role, p_allowance }) => {
+    needParentOf(p_id);
+    const m = mem(p_id);
+    if (!(p_name || "").trim()) fail("名字要在 20 字以內");
+    if (m.role === "parent" && p_role === "kid") {
+      if (m.is_owner) fail("建立家庭的家長不能改成孩子");
+      if (db.members.filter((x) => x.family_id === m.family_id && x.role === "parent" && !x.archived).length <= 1) fail("家裡至少要有一位家長");
+    }
+    Object.assign(m, { name: p_name.trim(), role: p_role, allowance: Math.max(0, p_allowance || 0) });
+  },
+  remove_member: ({ p_id }) => {
+    needParentOf(p_id);
+    if (p_id === meRow().id) fail("不能移除自己");
+    if (mem(p_id).is_owner) fail("不能移除建立家庭的家長");
+    Object.assign(mem(p_id), { archived: true, user_id: null });
+  },
+  update_family: ({ p_name, p_rate, p_bonus }) => {
+    if (!amParent()) fail("只有家長可以做這件事");
+    if (!(p_rate >= 0 && p_rate <= 10)) fail("月息要在 0 到 10% 之間");
+    if (!(p_bonus >= 0 && p_bonus <= 50)) fail("加碼要在 0 到 50% 之間");
+    Object.assign(db.families.find((f) => f.id === myFam()), { name: (p_name || "").trim() || "我們家", rate: p_rate, bonus_pct: p_bonus });
+  },
+  set_member_pin: ({ p_member, p_pin }) => {
+    needAccess(p_member);
+    if (!/^\d{4,8}$/.test(p_pin)) fail("密碼要是 4 到 8 位數字");
+    if (mem(p_member).role === "parent" && p_pin.length < 6) fail("家長的密碼至少 6 位數字");
+  },
+  set_theme: ({ p_member, p_theme }) => { needAccess(p_member); mem(p_member).theme = p_theme; },
+  save_year_plan: ({ p_member, p_year, p_data }) => {
+    needAccess(p_member);
+    const y = db.year_plans.find((x) => x.member_id === p_member && x.year === p_year);
+    if (y) Object.assign(y, { data: p_data, updated_at: now() });
+    else db.year_plans.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, year: p_year, data: p_data, updated_at: now() });
+  },
+  save_agreement: ({ p_member, p_items }) => {
+    needAccess(p_member);
+    const a = db.agreements.find((x) => x.member_id === p_member);
+    if (a) Object.assign(a, { items: p_items, kid_signed_at: null, parent_signed_at: null, parent_signer: null, updated_at: now() });
+    else db.agreements.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, items: p_items, kid_signed_at: null, parent_signed_at: null, parent_signer: null, updated_at: now() });
+  },
+  sign_agreement: ({ p_member }) => {
+    needAccess(p_member);
+    const a = db.agreements.find((x) => x.member_id === p_member) || fail("還沒有約定內容");
+    if (meRow().id === p_member) a.kid_signed_at = now();
+    else Object.assign(a, { parent_signed_at: now(), parent_signer: meRow().id });
+  },
+  year_stats: ({ p_member, p_year }) => {
+    needAccess(p_member);
+    const y = `${p_year}-`;
+    const L = db.ledger.filter((l) => l.member_id === p_member && l.month.startsWith(y));
+    const E = db.expenses.filter((e) => e.member_id === p_member && !e.voided && e.month.startsWith(y));
+    const sum = (a: Row[]) => a.reduce((s, x) => s + x.amount, 0);
+    const cats: Row = {};
+    E.forEach((e) => (cats[e.category] = (cats[e.category] || 0) + e.amount));
+    return { long_net: sum(L.filter((l) => l.jar === "long")), dream_net: sum(L.filter((l) => l.jar === "dream")), interest: sum(L.filter((l) => l.kind === "interest")),
+      spent: sum(E), need: sum(E.filter((e) => e.type === "need")), want: sum(E.filter((e) => e.type === "want")), cats };
+  },
+  rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
+};
+function activeGoal(mid: string) {
+  return db.goals.find((g) => g.member_id === mid && g.status === "active");
+}
+function addExpense({ p_member, p_item, p_amount, p_type, p_category }: any, source: string, at?: string, month?: string) {
+  const mk = month || curMonth();
+  if (!(p_amount > 0)) fail("請輸入金額");
+  if (!(p_item || "").trim()) fail("請寫下買了什麼");
+  const m = db.months.find((x) => x.member_id === p_member && x.month === mk);
+  if (!m) fail("這個月還沒做月初規劃，先到「本月」把零用金放進罐子");
+  if (m.status === "closed") fail("這個月已經結算了");
+  const free = bal(p_member, "free");
+  if (p_amount > free) fail(`自由罐只剩 ${free} 元，這筆錢不夠付`);
+  const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type,
+    category: p_category || "其他", source, voided: false, spent_on: (at || now()).slice(0, 10), created_at: at || now() };
+  db.expenses.push(row);
+  log(p_member, "free", -p_amount, row.item, mk, "expense", at);
+  return { id: row.id, left: free - p_amount };
+}
+
+// ---------- table reads with the same visibility rules as RLS ----------
+function visible(table: string, r: Row) {
+  if (!db.uid) return false;
+  if (table === "families") return r.id === myFam();
+  if (table === "members") return r.user_id === db.uid || (r.family_id === myFam() && amParent());
+  return canAccess(r.member_id);
+}
+class Query {
+  private f: ((r: Row) => boolean)[] = [];
+  private o: [string, boolean][] = [];
+  private n = 0;
+  private mode: "" | "single" | "maybe" = "";
+  constructor(private t: string) {}
+  select() { return this; }
+  eq(k: string, v: any) { this.f.push((r) => r[k] === v); return this; }
+  gte(k: string, v: any) { this.f.push((r) => r[k] >= v); return this; }
+  order(k: string, opt?: { ascending?: boolean }) { this.o.push([k, opt?.ascending !== false]); return this; }
+  limit(n: number) { this.n = n; return this; }
+  single() { this.mode = "single"; return this; }
+  maybeSingle() { this.mode = "maybe"; return this; }
+  then(res: (v: any) => any, rej?: (e: any) => any) {
+    let rows = ((db as any)[this.t] as Row[]).filter((r) => visible(this.t, r) && this.f.every((fn) => fn(r)));
+    for (const [k, asc] of [...this.o].reverse()) rows = [...rows].sort((a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0) * (asc ? 1 : -1));
+    if (this.n) rows = rows.slice(0, this.n);
+    rows = JSON.parse(JSON.stringify(rows));
+    const out = this.mode ? { data: rows[0] ?? null, error: this.mode === "single" && !rows[0] ? { message: "not found" } : null } : { data: rows, error: null };
+    return Promise.resolve(out).then(res, rej);
+  }
+}
+
+const wait = () => new Promise((r) => setTimeout(r, 120));
+
+export const supabase = {
+  from: (t: string) => new Query(t),
+  rpc: async (name: string, args: any) => {
+    await wait();
+    const snap = JSON.stringify(db);
+    try {
+      const data = F[name] ? F[name](args || {}) : fail("體驗版不支援這個功能");
+      save();
+      return { data: data === undefined ? null : JSON.parse(JSON.stringify(data)), error: null };
+    } catch (e: any) {
+      db = JSON.parse(snap); // discard partial changes, like a rolled-back transaction
+      return { data: null, error: { message: e instanceof Fail ? e.message : "發生錯誤" } };
+    }
+  },
+  auth: {
+    getSession: async () => ({ data: { session: db.uid ? { user: { id: db.uid } } : null } }),
+    onAuthStateChange: (cb: (e: string, s: any) => void) => {
+      listeners.push(cb);
+      return { data: { subscription: { unsubscribe: () => listeners.splice(listeners.indexOf(cb), 1) } } };
+    },
+    signOut: async () => { db.uid = null; save(); listeners.forEach((l) => l("SIGNED_OUT", null)); return { error: null }; },
+  },
+  functions: {
+    invoke: async (name: string, { body }: any) => {
+      await wait();
+      if (name !== "members") return { data: { ok: false, error: "體驗版不支援" }, error: null };
+      try {
+        if (!amParent()) fail("只有家長可以新增成員");
+        if (!(body.name || "").trim()) fail("名字要在 20 字以內");
+        if (!/^\d{4,8}$/.test(body.pin) || (body.role === "parent" && body.pin.length < 6)) fail(body.role === "parent" ? "家長的密碼至少 6 位數字" : "密碼要是 4 到 8 位數字");
+        const mid = id();
+        db.members.push({ id: mid, family_id: myFam(), user_id: "u-" + mid, name: body.name.trim(), role: body.role, allowance: Math.max(0, body.allowance || 0),
+          color: "sky", is_owner: false, archived: false, theme: body.role === "kid" ? "morandi" : "earth", created_at: now() });
+        save();
+        return { data: { ok: true, member_id: mid }, error: null };
+      } catch (e: any) {
+        return { data: { ok: false, error: e.message }, error: null };
+      }
+    },
+  },
+};
+
+export async function rpc<T = any>(name: string, args: Record<string, unknown> = {}): Promise<[T | null, string | null]> {
+  const { data, error } = await supabase.rpc(name, args);
+  return error ? [null, error.message] : [data as T, null];
+}
+export async function fn<T = any>(name: string, body: Record<string, unknown>): Promise<[T | null, string | null]> {
+  const { data } = await supabase.functions.invoke(name, { body });
+  return data?.ok === false ? [null, data.error] : [data as T, null];
+}
+
+// ---------- demo-only helpers ----------
+export function demoMembers() {
+  return db.members.filter((m) => !m.archived);
+}
+export function demoLogin(memberId: string) {
+  db.uid = mem(memberId).user_id;
+  save();
+  listeners.forEach((l) => l("SIGNED_IN", { user: { id: db.uid } }));
+}
+export function demoReset() {
+  db = seed();
+  save();
+  listeners.forEach((l) => l("SIGNED_OUT", null));
+}
+
+function seed(): DB {
+  db = blank();
+  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 2, bonus_pct: 10, created_at: now() };
+  db.families.push(fam);
+  const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
+    db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme, created_at: now() });
+  add("m1", "媽媽", "parent", 6000, "morandi", true);
+  add("m2", "爸爸", "parent", 5000, "earth");
+  add("m3", "哥哥", "kid", 1500, "court");
+  add("m4", "妹妹", "kid", 1200, "kpop");
+  const prev = shiftMonth(curMonth(), -1), cur = curMonth();
+  const as = (mid: string) => (db.uid = mem(mid).user_id);
+  const d = (mk: string, day: number) => `${mk}-${String(day).padStart(2, "0")}T04:00:00.000Z`;
+  const startOf = d(prev, 1);
+  const seedJar = (mid: string, dream: number, long: number) => { log(mid, "dream", dream, "之前存的", prev, "reward", startOf); log(mid, "long", long, "之前存的", prev, "reward", startOf); };
+  seedJar("m1", 8000, 20000); seedJar("m2", 3000, 30000); seedJar("m3", 1200, 3000); seedJar("m4", 800, 2000);
+  const goal = (mid: string, name: string, price: number) => db.goals.push({ id: id(), family_id: "f1", member_id: mid, name, price, status: "active", bonus_given: false, created_at: startOf });
+  goal("m1", "全家沖繩旅行", 60000); goal("m2", "登山背包", 6800); goal("m3", "新籃球鞋", 4280); goal("m4", "演唱會門票", 3800);
+
+  const month = (mid: string, mk: string, r: number[], exps: [string, number, string, string, number][], review?: Row) => {
+    as(mid);
+    F.plan_month({ p_member: mid, p_month: mk, p_extra: 0, p_extra_note: "", p_free: r[0], p_dream: r[1], p_long: r[2] });
+    const m = db.months.find((x) => x.member_id === mid && x.month === mk);
+    m.created_at = d(mk, 1);
+    db.ledger.filter((l) => l.member_id === mid && l.month === mk).forEach((l) => (l.created_at = d(mk, 1)));
+    exps.forEach(([item, amt, type, cat, day]) => addExpense({ p_member: mid, p_item: item, p_amount: amt, p_type: type, p_category: cat }, "app", d(mk, day), mk));
+    if (review) { F.save_review({ p_member: mid, p_month: mk, p_review: review }); F.close_month({ p_member: mid, p_month: mk }); }
+  };
+  month("m3", prev, [50, 30, 20], [["珍珠奶茶", 65, "want", "飲料點心", 3], ["籃球場租借", 100, "want", "娛樂", 8], ["遊戲點數", 150, "want", "娛樂", 12], ["補習班講義", 120, "need", "文具學習", 18]],
+    { best: "和同學一起租球場打球", regret: "遊戲點數一下就用完了", next: "遊戲點數一個月最多 100 元", to: "dream" });
+  month("m4", prev, [40, 40, 20], [["偶像小卡", 180, "want", "娛樂", 5], ["文具", 90, "need", "文具學習", 10], ["手搖飲", 55, "want", "飲料點心", 20]],
+    { best: "文具用得到", regret: "小卡買太多張", next: "小卡先列清單再買", to: "dream" });
+  month("m1", prev, [40, 30, 30], [["咖啡", 450, "want", "飲料點心", 9], ["書", 380, "need", "文具學習", 15]], { best: "買了一本好書", regret: "", next: "和孩子一起做月底檢討", to: "long" });
+  month("m2", prev, [40, 30, 30], [["登山步道交通", 300, "need", "交通", 14]], { best: "週末帶孩子去爬山", regret: "", next: "記得每週記帳", to: "long" });
+  const today = +new Date().toLocaleString("en-CA", { timeZone: "Asia/Taipei", day: "2-digit" });
+  month("m3", cur, [50, 30, 20], [["雞排", 85, "want", "正餐", 1], ["公車", 30, "need", "交通", Math.max(1, Math.min(today, 2))]]);
+  month("m1", cur, [40, 30, 30], []);
+
+  as("m3");
+  F.save_agreement({ p_member: "m3", p_items: [
+    "零用金每月 NT$ 1,500，每月 1 日發放。", "每月 1 日前完成月初規劃：長期罐至少 20%，夢想罐至少 20%。",
+    "花了錢當天記帳；每週日晚上檢查一次。", "每月最後一個週末，和爸爸一起完成月底檢討。",
+    "遊戲點數從自由罐出，一個月最多 NT$ 100。", "連續 3 個月拿到星星，可以提出調高零用金。"] });
+  F.sign_agreement({ p_member: "m3" });
+  F.save_year_plan({ p_member: "m3", p_year: +cur.slice(0, 4), p_data: { target_long: 6000, wishes: "新籃球鞋\n暑假籃球營", incomes: [{ name: "過年紅包", month: 2, amount: 6000 }], spends: [{ name: "暑假籃球營", month: 7, amount: 3500 }], reflection: "" } });
+  db.uid = null;
+  return db;
+}
+
+db = load();
