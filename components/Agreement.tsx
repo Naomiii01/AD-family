@@ -10,8 +10,8 @@ function template(app: App): string[] {
   return [
     `零用金每月 ${fmt(sel.allowance)}，每月 1 日發放。`,
     `每月 1 日前完成月初規劃；長期罐每月至少 ${fmt(family.long_min)}。`,
-    `長期罐放多少，爸媽就配對 ${family.match_pct}%，一起每月定期買股票；18 歲前不提領。`,
-    `夢想罐自己存的錢每存滿 ${fmt(family.bonus_step)}，月底結算時爸媽加碼 ${family.bonus_pct}%；花掉後從 0 重新算。`,
+    `長期罐放多少，爸爸就配對 ${family.match_pct}%，一起每月定期買股票；18 歲前不提領。`,
+    `夢想罐自己存的錢每存滿 ${fmt(family.bonus_step)}，月底結算時爸爸加碼 ${family.bonus_pct}%；花掉後從 0 重新算。`,
     "花了錢當天記帳；每週日晚上檢查一次有沒有漏記。",
     "每月最後一個週末，和爸爸或媽媽一起完成月底檢討。",
     "買超過 NT$ 1,000 的東西前，先和爸媽討論。",

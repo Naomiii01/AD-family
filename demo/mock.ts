@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v3";
+const KEY = "adf-demo-v4";
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; seq: number; uid: string | null };
@@ -78,7 +78,7 @@ const F: Record<string, (a: any) => any> = {
       if (fam.match_cap > 0) match = Math.min(match, fam.match_cap);
     }
     (["free", "dream", "long"] as const).forEach((j) => log(p_member, j, a[j], label(p_month), p_month, "allowance"));
-    log(p_member, "long", match, "爸媽配對投資", p_month, "match");
+    log(p_member, "long", match, "爸爸配對投資", p_month, "match");
     (a as any).match = match;
     db.months.push({ id: db.seq++, family_id: mem(p_member).family_id, member_id: p_member, month: p_month, status: "active", income: mem(p_member).allowance,
       extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio: { free: p_free, dream: p_dream, long: p_long }, alloc: a,
@@ -162,7 +162,7 @@ const F: Record<string, (a: any) => any> = {
     if (!g || g.bonus_given) fail("目前沒有可以發放的加碼");
     if (bal(p_member, "dream") * 2 < g.price) fail("夢想還沒存到一半");
     const amt = Math.round((g.price * db.families.find((f) => f.id === g.family_id).bonus_pct) / 100);
-    log(p_member, "dream", amt, "爸媽夢想加碼", curMonth(), "bonus");
+    log(p_member, "dream", amt, "爸爸夢想加碼", curMonth(), "bonus");
     g.bonus_given = true;
     return amt;
   },

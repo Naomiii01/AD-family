@@ -77,7 +77,7 @@ export default function Jars({ app }: { app: App }) {
         </section>
       )}
       <p className="note center">
-        {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，爸媽配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
+        {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，爸爸配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
         {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}
       </p>
     </>
@@ -184,10 +184,10 @@ function LongCard({ app }: { app: App }) {
       <div className="card-h"><h2>長期罐：定期投資</h2>{rate > 0 && <span className="pill active">家庭銀行月息 {rate}%</span>}</div>
       {sel.role === "kid" ? (
         <>
-          <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，爸媽就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期定額買股票，只進不出。</p>
+          <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，爸爸就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期定額買股票，只進不出。</p>
           <div className="grid3 center">
             <div><div className="note">你放</div><b className="num">{fmt(plan.long)}</b></div>
-            <div><div className="note">爸媽配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(plan.match || 0)}</b></div>
+            <div><div className="note">爸爸配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(plan.match || 0)}</b></div>
             <div><div className="note">每月投資</div><b className="num">{fmt(per)}</b></div>
           </div>
         </>
@@ -218,7 +218,7 @@ function MilestoneNote({ app }: { app: App }) {
       <div className="kv small"><span>夢想加碼關卡</span><b>{tiers > 0 ? `已拿 ${tiers} 次 · ${fmt(tiers * bonus)}` : "還沒拿過"}</b></div>
       <div className="bar"><span style={{ width: `${clamp((own % step) / step, 0, 1) * 100}%`, background: "var(--accent)" }} /></div>
       <p className="small">
-        自己存了 {fmt(own)}。{pending ? `已經存滿 ${fmt(reached * step)}，月底結算時會拿到加碼 ${fmt((reached - tiers) * bonus)}。` : `再存 ${fmt(next - own)} 到 ${fmt(next)}，月底結算時爸媽加碼 ${fmt(bonus)}。`}
+        自己存了 {fmt(own)}。{pending ? `已經存滿 ${fmt(reached * step)}，月底結算時會拿到加碼 ${fmt((reached - tiers) * bonus)}。` : `再存 ${fmt(next - own)} 到 ${fmt(next)}，月底結算時爸爸加碼 ${fmt(bonus)}。`}
       </p>
       <p className="note">只算自己存進夢想罐的錢；夢想罐花掉後，關卡從 0 重新開始。</p>
     </div>

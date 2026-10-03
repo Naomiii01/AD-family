@@ -142,9 +142,9 @@ function Plan({ app }: { app: App }) {
           ) : (
             <div className="sug">
               <div className="kv small"><span>你放進長期罐</span><b>{fmt(a.long)}</b></div>
-              <div className="kv small"><span>爸媽配對 {app.family.match_pct}%</span><b style={{ color: "var(--long)" }}>+{fmt(match)}</b></div>
+              <div className="kv small"><span>爸爸配對 {app.family.match_pct}%</span><b style={{ color: "var(--long)" }}>+{fmt(match)}</b></div>
               <div className="kv"><span>這個月一起投資</span><b>{fmt(a.long + match)}</b></div>
-              <p className="note">長期罐放越多，爸媽配對越多。</p>
+              <p className="note">長期罐放越多，爸爸配對越多。</p>
             </div>
           )
         )}
@@ -204,7 +204,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           ))}
         </div>
-        {mo.alloc.match > 0 && <p className="small">爸媽配對投資 <b style={{ color: "var(--long)" }}>+{fmt(mo.alloc.match)}</b>，這個月長期罐一共投資 {fmt(mo.alloc.long + mo.alloc.match)}。</p>}
+        {mo.alloc.match > 0 && <p className="small">爸爸配對投資 <b style={{ color: "var(--long)" }}>+{fmt(mo.alloc.match)}</b>，這個月長期罐一共投資 {fmt(mo.alloc.long + mo.alloc.match)}。</p>}
         {mo.extra > 0 && <p className="note">含額外收入 {fmt(mo.extra)}{mo.extra_note ? `（${mo.extra_note}）` : ""}</p>}
       </section>
 

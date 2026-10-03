@@ -58,11 +58,11 @@ function FamilyCard({ app }: { app: App }) {
       <h3>長期罐配對投資</h3>
       <div className="grid2">
         <label className="f">孩子每月最少（元）<input id="f-lmin" type="number" inputMode="numeric" min={0} value={lmin} onChange={(e) => setLmin(e.target.value)} /></label>
-        <label className="f">爸媽配對（%）<input id="f-mpct" type="number" inputMode="numeric" min={0} max={300} value={mpct} onChange={(e) => setMpct(e.target.value)} /></label>
+        <label className="f">爸爸配對（%）<input id="f-mpct" type="number" inputMode="numeric" min={0} max={300} value={mpct} onChange={(e) => setMpct(e.target.value)} /></label>
         <label className="f">每月配對上限（0 = 不設上限）<input id="f-mcap" type="number" inputMode="numeric" min={0} value={mcap} onChange={(e) => setMcap(e.target.value)} /></label>
         <label className="f">家庭銀行月息（%）<input id="f-rate" type="number" inputMode="decimal" min={0} max={10} step={0.5} value={rate} onChange={(e) => setRate(e.target.value)} /></label>
       </div>
-      <p className="note">配對 100% 代表孩子放多少、爸媽就加多少。長期罐已經拿去買股票的話，家庭銀行月息可以設成 0。</p>
+      <p className="note">配對 100% 代表孩子放多少、爸爸就加多少。長期罐已經拿去買股票的話，家庭銀行月息可以設成 0。</p>
       <div><button className="btn primary" disabled={busy} onClick={save}>儲存</button></div>
     </section>
   );
