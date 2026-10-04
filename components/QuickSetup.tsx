@@ -95,8 +95,8 @@ export default function QuickSetup({ app }: { app: App }) {
           <li>加入「<b>取得 URL 內容</b>」：網址貼上上面的網址；方法選「POST」；要求本文選「JSON」，新增 4 個欄位：
             <div className="mono" style={{ marginTop: 6 }}>token → 貼上記帳碼<br />amount → 「提供的輸入」（第 1 個）<br />item → 「提供的輸入」（第 2 個）<br />type → 「選取的項目」</div>
           </li>
-          <li>加入「<b>取得字典值</b>」：取得「message」的值，來源是「URL 的內容」。</li>
-          <li>加入「<b>顯示通知</b>」，內容放「字典值」。完成後按一次試試看。</li>
+          <li>加入「<b>取得辭典值</b>」：取得「message」的值，來源是「URL 的內容」。</li>
+          <li>加入「<b>顯示通知</b>」，內容放「辭典值」。完成後按一次試試看。</li>
           <li>想更快：在捷徑上長按 → 「加入主畫面」；或對 Siri 說「零用金記帳」。</li>
         </ol>
         <p className="note">記帳一樣要先完成本月規劃，自由罐不夠時會顯示剩多少錢。</p>
