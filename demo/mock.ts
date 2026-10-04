@@ -61,6 +61,41 @@ const F: Record<string, (a: any) => any> = {
       extras: Object.fromEntries(extraKeys(p_member).map((k) => [k, bal(p_member, k)])) };
   },
   plan_month_v3: (args) => F.plan_month_v2(args),
+  plan_month_amt: ({ p_member, p_month, p_income, p_extra, p_extra_note, p_amounts }) => {
+    needAccess(p_member);
+    const keys = jarKeys(p_member);
+    for (const k of Object.keys(p_amounts || {})) if (!keys.includes(k)) fail("沒有這個罐子：" + k);
+    if (p_month > shiftMonth(curMonth(), 1)) fail("只能規劃本月或下個月");
+    if (db.months.some((m) => m.member_id === p_member && m.month === p_month)) fail("這個月已經規劃過了");
+    const open = db.months.filter((m) => m.member_id === p_member && m.status === "active" && m.month < p_month).sort((a, b) => (a.month < b.month ? -1 : 1))[0];
+    if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
+    const me = mem(p_member), fam = famOf(p_member);
+    let inc = me.role === "parent" && p_income != null ? Math.max(0, Math.round(p_income)) : me.allowance;
+    const adv = db.advances.find((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
+    if (adv) { inc = Math.max(0, inc - adv.amount); adv.repaid = true; }
+    const total = inc + (p_extra || 0);
+    const a: Row = {};
+    let others = 0;
+    for (const k of keys) if (k !== "free") { const v = Math.round(p_amounts?.[k] || 0); if (v < 0) fail("金額不能是負數"); a[k] = v; others += v; }
+    if (others > total) fail(`分配的錢（${others} 元）超過這個月的收入（${total} 元）`);
+    a.free = total - others;
+    const ratio: Row = Object.fromEntries(keys.map((k) => [k, total > 0 ? Math.round((a[k] * 100) / total) : 0]));
+    let match = 0;
+    if (me.role === "kid") {
+      const min = Math.min(fam.long_min, total);
+      if (a.long < min) fail(`長期罐每月至少要放 ${min} 元，現在只有 ${a.long} 元`);
+      match = Math.round((a.long * fam.match_pct) / 100);
+      if (fam.match_cap > 0) match = Math.min(match, fam.match_cap);
+    }
+    const lbl = `${p_month.slice(0, 4)} 年 ${+p_month.slice(5)} 月${me.role === "parent" ? "收入" : "零用金"}`;
+    keys.forEach((j) => log(p_member, j, a[j], lbl, p_month, "allowance"));
+    log(p_member, "long", match, fam.guardian + "配對投資", p_month, "match");
+    a.match = match;
+    a.advance = adv ? adv.amount : 0;
+    db.months.push({ id: db.seq++, family_id: me.family_id, member_id: p_member, month: p_month, status: "active", income: inc,
+      extra: p_extra || 0, extra_note: (p_extra_note || "").slice(0, 40), ratio, alloc: a,
+      free_start: bal(p_member, "free"), review: {}, interest: 0, moved: 0, star: false, created_at: now() });
+  },
   plan_month_v2: ({ p_member, p_month, p_income, p_extra, p_extra_note, p_ratio }) => {
     needAccess(p_member);
     const keys = jarKeys(p_member);

@@ -484,3 +484,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- ---------- 2026-10-04: adults enter this month's salary ----------
 -- Applied as Supabase migration "plan_month_v3_salary": plan_month_v3(member, month, p_income, extra, note, ratio);
 -- for parents p_income replaces the stored allowance, kids always use the allowance set by a parent.
+
+-- ---------- 2026-10-04: plan by NT$ amounts ----------
+-- Applied as Supabase migration "plan_month_by_amounts": plan_month_amt(member, month, p_income, extra, note, p_amounts jsonb);
+-- each non-free jar gets its amount, free takes the remainder, ratio is stored as rounded percentages for display.

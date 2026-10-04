@@ -36,9 +36,10 @@ function Plan({ app }: { app: App }) {
   const { data, sel, mk, toast } = app;
   const last = [...data.months].reverse()[0];
   const jars = jarList(sel);
-  const [r, setR] = useState<Record<string, number>>(() => startRatio(sel, last?.ratio));
-  const [extra, setExtra] = useState("");
+  const others = jars.filter((j) => j.key !== "free").map((j) => j.key);
   const isAdult = sel.role === "parent";
+  const isKid = !isAdult;
+  const [extra, setExtra] = useState("");
   const [salary, setSalary] = useState(String(sel.allowance || ""));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,37 +50,36 @@ function Plan({ app }: { app: App }) {
   }, [sel.id, mk]);
   const base = isAdult ? Math.max(0, Math.round(+salary) || 0) : Math.max(0, sel.allowance - adv);
   const total = base + (Math.max(0, Math.round(+extra)) || 0);
-  const a = split(total, r);
+
+  // amounts per jar (NT$); free takes whatever is left
+  const [amt, setAmt] = useState<Record<string, string>>(() => {
+    const start = split(isAdult ? sel.allowance || 0 : sel.allowance, startRatio(sel, last?.ratio));
+    const o: Record<string, string> = {};
+    for (const k of others) o[k] = String(last?.alloc?.[k] ?? start[k] ?? 0);
+    return o;
+  });
+  const a: Record<string, number> = {};
+  let used = 0;
+  for (const k of others) { a[k] = Math.max(0, Math.round(+amt[k]) || 0); used += a[k]; }
+  a.free = total - used;
+  const over = a.free < 0;
+  const pct = (k: string) => (total > 0 ? Math.round((Math.max(0, a[k]) * 100) / total) : 0);
+  const setFrom = (r: Record<string, number>) => {
+    const sp = split(total, r);
+    setAmt(Object.fromEntries(others.map((k) => [k, String(sp[k] || 0)])));
+  };
+
   const g = data.goal;
   const openPrev = data.months.find((x) => x.status === "active" && x.month < mk);
-  const isKid = sel.role === "kid";
   const minLong = isKid ? Math.min(app.family.long_min, total) : 0;
   const lowLong = a.long < minLong;
   const match = matchOf(app.family, sel.role, a.long);
-  const fixLong = () => {
-    setR((x) => {
-      const y: Record<string, number> = { ...x };
-      while (split(total, y).long < minLong && (y.free >= 5 || y.dream >= 5)) {
-        if (y.free >= 5) y.free -= 5; else y.dream -= 5;
-        y.long += 5;
-      }
-      return y;
-    });
-  };
-
-  const bump = (k: string, d: number) => {
-    setR((x) => {
-      const y: Record<string, number> = { ...x };
-      if (d > 0 && y.free >= 5) { y[k] += 5; y.free -= 5; }
-      if (d < 0 && y[k] >= 5) { y[k] -= 5; y.free += 5; }
-      return y;
-    });
-  };
 
   async function confirm() {
     setBusy(true);
-    const [, e] = await rpc("plan_month_v3", {
-      p_member: sel.id, p_month: mk, p_income: isAdult ? base : null, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note, p_ratio: r,
+    const [, e] = await rpc("plan_month_amt", {
+      p_member: sel.id, p_month: mk, p_income: isAdult ? base : null, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note,
+      p_amounts: Object.fromEntries(others.map((k) => [k, a[k]])),
     });
     setBusy(false);
     if (e) return toast(e);
@@ -88,40 +88,38 @@ function Plan({ app }: { app: App }) {
   }
 
   let insight = null;
-  if (g && g.price > data.bal.dream) {
+  if (g && g.price > data.bal.dream && !over) {
     const rem = g.price - data.bal.dream;
     const n = a.dream > 0 ? Math.ceil(rem / a.dream) : Infinity;
-    const move = Math.min(10, r.free);
-    const more = split(total, { ...r, free: r.free - move, dream: r.dream + move }).dream;
-    const n2 = more > 0 ? Math.ceil(rem / more) : Infinity;
+    const move = Math.min(a.free, Math.round(total * 0.1 / 100) * 100);
+    const n2 = a.dream + move > 0 ? Math.ceil(rem / (a.dream + move)) : Infinity;
     insight = (
       <div className="insight">
-        照這個分配，「{g.name}」{n === Infinity ? "不會前進，夢想罐是 0%。" : <>還要 <b>{n} 個月</b>。</>}
-        {move > 0 && n2 < n && <><br /><span className="small">如果從自由罐多挪 {move}% 給夢想，只要 {n2} 個月。少花一點，夢想就近一點。</span></>}
+        照這個分配，「{g.name}」{n === Infinity ? "不會前進，夢想罐是 0 元。" : <>還要 <b>{n} 個月</b>。</>}
+        {move > 0 && n2 < n && <><br /><span className="small">如果從自由罐多挪 {fmt(move)} 給夢想，只要 {n2} 個月。少花一點，夢想就近一點。</span></>}
       </div>
     );
   }
 
   const hint = (k: string) =>
-    k === "free" ? "剩下的都在這裡" : k === "dream" ? "為夢想存" : k === "long" ? (sel.role === "kid" ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資")
+    k === "free" ? "剩下的錢自動放這裡" : k === "dream" ? "為夢想存" : k === "long" ? (isKid ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資")
       : k === "fixed" ? "房租、保險、電話費" : k === "reserve" ? "突發狀況用" : "";
   const row = (k: string) => (
     <div className="arow" key={k}>
       <span className="dot" style={{ background: `var(--${k})` }} />
-      <div>
-        <div className="nm">{jarName(sel, k)}</div>
+      <div style={{ minWidth: 0 }}>
+        <div className="nm">{jarName(sel, k)} <span className="pct small muted" style={{ fontWeight: 500 }}>{pct(k)}%</span></div>
         <div className="small muted">{hint(k)}</div>
       </div>
-      <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
-        {k === "free" ? <span className="pct">{r.free}%</span> : (
-          <div className="step">
-            <button onClick={() => bump(k, -5)} aria-label={`${jarName(sel, k)}減少`} disabled={r[k] < 5}>−</button>
-            <span className="pct">{r[k]}%</span>
-            <button onClick={() => bump(k, 5)} aria-label={`${jarName(sel, k)}增加`} disabled={r.free < 5}>+</button>
-          </div>
-        )}
-        <span className="amt">{fmt(a[k] || 0)}</span>
-      </div>
+      {k === "free" ? (
+        <span className="amt" style={{ color: over ? "var(--warn)" : undefined }}>{fmt(a.free)}</span>
+      ) : (
+        <label className="amt-in">
+          <span className="small muted">NT$</span>
+          <input id={`amt-${k}`} type="number" inputMode="numeric" min={0} step={100} aria-label={`${jarName(sel, k)}金額`}
+            value={amt[k]} onChange={(e) => setAmt({ ...amt, [k]: e.target.value })} onFocus={(e) => e.target.select()} />
+        </label>
+      )}
     </div>
   );
 
@@ -142,22 +140,24 @@ function Plan({ app }: { app: App }) {
         <div className="kv"><span className="muted">本月總共</span><b>{fmt(total)}</b></div>
       </section>
       <section className="card">
-        <h3>2. 分配到{jars.length === 3 ? "三" : ` ${jars.length} `}個罐子</h3>
+        <h3>2. 每個罐子放多少錢</h3>
+        <p className="small muted">直接填金額，百分比會自動算好；沒分出去的錢都放進自由罐。</p>
         <div className="alloc">{jars.map((j) => row(j.key))}</div>
+        {over && <div className="banner warn"><span>分配的錢比這個月的收入多了 {fmt(-a.free)}，請把其他罐子減少一點。</span></div>}
         {app.isParent && (
           <div><button className="btn sm" onClick={() => app.go("more", "jars")}>＋ 新增或移除罐子</button></div>
         )}
         {jars.length === 3 && <div className="row">
           <span className="small muted">快速選：</span>
-          <button className="btn sm" onClick={() => setR({ free: 50, dream: 30, long: 20 })}>均衡 5:3:2</button>
-          <button className="btn sm" onClick={() => setR({ free: 30, dream: 50, long: 20 })}>衝夢想 3:5:2</button>
-          <button className="btn sm" onClick={() => setR({ free: 40, dream: 20, long: 40 })}>長期派 4:2:4</button>
+          <button className="btn sm" onClick={() => setFrom({ free: 50, dream: 30, long: 20 })}>均衡 5:3:2</button>
+          <button className="btn sm" onClick={() => setFrom({ free: 30, dream: 50, long: 20 })}>衝夢想 3:5:2</button>
+          <button className="btn sm" onClick={() => setFrom({ free: 40, dream: 20, long: 40 })}>長期派 4:2:4</button>
         </div>}
         {isKid && (
           lowLong ? (
             <div className="banner warn">
               <span>長期罐每月至少要放 {fmt(minLong)}，現在只有 {fmt(a.long)}。</span>
-              <div><button className="btn sm primary" onClick={fixLong}>調到至少 {fmt(minLong)}</button></div>
+              <div><button className="btn sm primary" onClick={() => setAmt({ ...amt, long: String(minLong) })}>改成 {fmt(minLong)}</button></div>
             </div>
           ) : (
             <div className="sug">
@@ -176,8 +176,8 @@ function Plan({ app }: { app: App }) {
           <div><button className="btn sm primary" onClick={() => { app.setMk(openPrev.month); app.go("review"); }}>去結算 {mkLabel(openPrev.month)}</button></div>
         </div>
       )}
-      <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev || lowLong} onClick={confirm}>確認本月規劃，放進罐子</button>
-      <p className="note center">確認後錢會放進罐子，這個月的比例就不能再改。</p>
+      <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev || lowLong || over} onClick={confirm}>確認本月規劃，放進罐子</button>
+      <p className="note center">確認後錢會放進罐子，這個月的分配就不能再改。</p>
       {!isAdult && sel.allowance === 0 && <p className="note center">零用金目前是 0 元，請家長到「更多 → 家長設定」設定金額。</p>}
     </>
   );
