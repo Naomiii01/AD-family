@@ -15,7 +15,7 @@ function Picker() {
         <JarSVG kind="long" pct={0.75} />
       </div>
       <div className="center" style={{ display: "grid", gap: 6 }}>
-        <h1 className="logo" style={{ fontSize: "1.8rem" }}><b>三</b><i>罐</i><u>零用金</u></h1>
+        <h1 className="logo" style={{ fontSize: "1.8rem" }}><b>My</b><i>零用</i><u>錢</u></h1>
         <p className="muted small">選你的名字進去</p>
       </div>
       <section className="card">

@@ -32,11 +32,11 @@ function buildIcs(name: string, memberId: string, day: string, time: string, mon
   const lines = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//AD Family//San Guan//ZH", "CALSCALE:GREGORIAN",
     "BEGIN:VTIMEZONE", "TZID:Asia/Taipei", "BEGIN:STANDARD", "DTSTART:19700101T000000", "TZOFFSETFROM:+0800", "TZOFFSETTO:+0800", "TZNAME:CST", "END:STANDARD", "END:VTIMEZONE",
-    ...ev("weekly", nextDate(di), `FREQ=WEEKLY;BYDAY=${day}`, `三罐零用金：${name}每週記帳檢查`, "看看這週有沒有漏記帳，自由罐還剩多少。"),
+    ...ev("weekly", nextDate(di), `FREQ=WEEKLY;BYDAY=${day}`, `My零用錢：${name}每週記帳檢查`, "看看這週有沒有漏記帳，自由罐還剩多少。"),
   ];
   if (monthly) {
-    lines.push(...ev("plan", firstOfNextMonth(), "FREQ=MONTHLY;BYMONTHDAY=1", `三罐零用金：${name}月初規劃`, "把這個月的零用金分進三個罐子。"));
-    lines.push(...ev("review", firstOfNextMonth(), "FREQ=MONTHLY;BYMONTHDAY=-1", `三罐零用金：${name}月底檢討`, "回答三個問題、決定結餘去向、完成結算。"));
+    lines.push(...ev("plan", firstOfNextMonth(), "FREQ=MONTHLY;BYMONTHDAY=1", `My零用錢：${name}月初規劃`, "把這個月的零用金分進三個罐子。"));
+    lines.push(...ev("review", firstOfNextMonth(), "FREQ=MONTHLY;BYMONTHDAY=-1", `My零用錢：${name}月底檢討`, "回答三個問題、決定結餘去向、完成結算。"));
   }
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
@@ -137,7 +137,7 @@ export default function QuickSetup({ app }: { app: App }) {
         </div>
         <label className="row small"><input type="checkbox" style={{ width: "auto" }} checked={monthly} onChange={(e) => setMonthly(e.target.checked)} />一起加上月初規劃、月底檢討提醒</label>
         {IS_DEMO ? <p className="banner small">體驗版不能下載行事曆檔。正式版部署後，按這裡就會加到手機行事曆。</p>
-          : <a className="btn primary" href={icsHref} download="三罐零用金提醒.ics">加到行事曆</a>}
+          : <a className="btn primary" href={icsHref} download="My零用錢提醒.ics">加到行事曆</a>}
         <p className="note">iPhone 會跳出「加入行事曆」的畫面，按「全部加入」。Android 會用 Google 日曆打開。</p>
       </section>
 

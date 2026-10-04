@@ -98,7 +98,7 @@ export default function Shell({ userId }: { userId: string }) {
       <div className="wrap">
         <header className="top">
           <div className="brand">
-            <span className="row" style={{ gap: 6 }}>{SKINS[skinOf(me)].motif}<span className="logo"><b>三</b><i>罐</i><u>零用金</u></span></span>
+            <span className="row" style={{ gap: 6 }}>{SKINS[skinOf(me)].motif}<span className="logo"><b>My</b><i>零用</i><u>錢</u></span></span>
             <span className="small muted">{family.name}</span>
           </div>
           {isParent && members.length > 1 && (

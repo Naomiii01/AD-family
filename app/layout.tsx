@@ -2,10 +2,10 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "三罐零用金",
+  title: "My零用錢",
   description: "全家一起學習零用金規劃：自由罐、夢想罐、長期罐。",
-  applicationName: "三罐零用金",
-  appleWebApp: { capable: true, title: "三罐零用金", statusBarStyle: "default" },
+  applicationName: "My零用錢",
+  appleWebApp: { capable: true, title: "My零用錢", statusBarStyle: "default" },
   icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
 };
 

@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "三罐零用金",
-    short_name: "三罐零用金",
+    name: "My零用錢",
+    short_name: "My零用錢",
     description: "全家一起學習零用金規劃",
     start_url: "/",
     display: "standalone",

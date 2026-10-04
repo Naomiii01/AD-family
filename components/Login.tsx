@@ -98,7 +98,7 @@ export default function Login() {
       </div>
       <div className="center" style={{ display: "grid", gap: 6 }}>
         <h1 className="logo" style={{ fontSize: "1.8rem" }}>
-          <b>三</b><i>罐</i><u>零用金</u>
+          <b>My</b><i>零用</i><u>錢</u>
         </h1>
         <p className="muted small">全家一起學習規劃零用金、為夢想存錢</p>
       </div>
