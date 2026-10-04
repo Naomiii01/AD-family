@@ -425,7 +425,7 @@ const jarKeys = (mid: string) => ["free", "dream", "long", ...extraKeys(mid)];
 const jarNm = (mid: string, k: string) => ({ free: "自由罐", dream: "夢想罐", long: "長期罐" } as Row)[k] || (mem(mid).extra_jars || []).find((j: Row) => j.key === k)?.name || k;
 function normPay(v: any): string {
   const t = String(v ?? "").trim().toLowerCase();
-  const m = ({ "": "", cash: "cash", "現金": "cash", card: "card", "信用卡": "card", epay: "epay", "電子支付": "epay" } as Row)[t];
+  const m = ({ "": "", cash: "cash", "現金": "cash", card: "card", "信用卡": "card", epay: "epay", "電子支付": "epay", transfer: "transfer", "轉帳": "transfer", "扣款": "transfer", "自動扣款": "transfer" } as Row)[t];
   return m === undefined ? fail("支付方式不正確") : m;
 }
 function addExpense({ p_member, p_item, p_amount, p_type, p_category, p_jar }: any, source: string, at?: string, month?: string) {

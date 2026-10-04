@@ -95,7 +95,7 @@ export default function QuickSetup({ app }: { app: App }) {
           <li>加入動作「<b>URL</b>」，把上面的網址貼進去。</li>
           <li>再加入「<b>取得 URL 內容</b>」（它會自動接上一步的 URL）；方法選「POST」；要求本文選「JSON」，新增 4 個欄位：
             <div className="mono" style={{ marginTop: 6 }}>token → 貼上記帳碼<br />amount → 「提供的輸入」（第 1 個）<br />item → 「提供的輸入」（第 2 個）<br />type → 「選取的項目」<br />pay →（選填）付款方式，例如「LINE Pay」「現金」「國泰」</div>
-            <span className="note">pay 可以直接打字固定一種，也可以像「想要／需要」一樣再做一個列表讓自己選。寫銀行名稱會記成信用卡，寫 LINE Pay、街口、全支付等會記成電子支付。</span>
+            <span className="note">pay 可以直接打字固定一種，也可以像「想要／需要」一樣再做一個列表讓自己選。寫銀行名稱會記成信用卡，寫 LINE Pay、街口、全支付等會記成電子支付，寫「轉帳」或「扣款」會記成轉帳。</span>
           </li>
           <li>加入「<b>取得辭典值</b>」：取得「message」的值，來源是「URL 的內容」。</li>
           <li>加入「<b>顯示通知</b>」，內容放「辭典值」。完成後按一次試試看。</li>

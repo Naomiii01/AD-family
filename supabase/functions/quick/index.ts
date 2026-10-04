@@ -3,13 +3,13 @@
 import { admin, cors, json, readBody } from "../_shared/util.ts";
 
 const EPAY = /line\s*pay|街口|jko|全支付|px\s*pay|悠遊付|easy\s*wallet|icash\s*pay|全盈|pi\s*拍|拍錢包|一卡通|ipass|台灣\s*pay|taiwan\s*pay|apple\s*pay|google\s*pay|samsung\s*pay|電子支付/i;
-const METHOD: Record<string, string> = { cash: "cash", 現金: "cash", card: "card", 信用卡: "card", epay: "epay", 電子支付: "epay" };
-const LABEL: Record<string, string> = { cash: "現金", card: "信用卡", epay: "電子支付" };
+const METHOD: Record<string, string> = { cash: "cash", 現金: "cash", card: "card", 信用卡: "card", epay: "epay", 電子支付: "epay", transfer: "transfer", 轉帳: "transfer", 扣款: "transfer", 自動扣款: "transfer" };
+const LABEL: Record<string, string> = { cash: "現金", card: "信用卡", epay: "電子支付", transfer: "轉帳" };
 
 function inferPay(methodRaw: string, payRaw: string): [string, string] {
   let m = METHOD[methodRaw.trim().toLowerCase()] ?? METHOD[methodRaw.trim()] ?? "";
   const p = payRaw.trim();
-  if (!m && p) m = /現金|cash/i.test(p) ? "cash" : EPAY.test(p) ? "epay" : "card";
+  if (!m && p) m = /現金|cash/i.test(p) ? "cash" : /轉帳|扣款|匯款|transfer/i.test(p) ? "transfer" : EPAY.test(p) ? "epay" : "card";
   const detail = m === "cash" ? "" : (METHOD[p] || METHOD[p.toLowerCase()] ? "" : p).slice(0, 20);
   return [m, detail];
 }

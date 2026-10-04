@@ -39,11 +39,11 @@ export function PayPicker({ mid, value, onChange, history = [] }: { mid: string;
       </div>
       {value.m !== "cash" && (
         <>
-          <div className="chips" role="group" aria-label={value.m === "card" ? "哪一家信用卡" : "哪一種電子支付"}>
+          <div className="chips" role="group" aria-label={value.m === "card" ? "哪一家信用卡" : value.m === "transfer" ? "哪個帳戶" : "哪一種電子支付"}>
             {opts.map((o) => <button key={o} className={`chip ${value.d === o ? "on" : ""}`} onClick={() => onChange({ ...value, d: value.d === o ? "" : o })}>{o}</button>)}
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <input className="pay-other" maxLength={20} placeholder={value.m === "card" ? "其他銀行，例如：永豐" : "其他，例如：icash Pay"} value={custom}
+            <input className="pay-other" maxLength={20} placeholder={value.m === "epay" ? "其他，例如：icash Pay" : "其他銀行，例如：永豐"} value={custom}
               onChange={(e) => setCustom(e.target.value)} />
             <button className="btn sm" disabled={!custom.trim()} onClick={() => { onChange({ ...value, d: custom.trim() }); setCustom(""); }}>選這個</button>
           </div>
@@ -63,7 +63,7 @@ export function PayStats({ list }: { list: any[] }) {
     g.t += e.amount;
     if (e.pay_detail) g.d[e.pay_detail] = (g.d[e.pay_detail] || 0) + e.amount;
   }
-  const order = ["cash", "card", "epay", ""].filter((k) => by[k]);
+  const order = ["cash", "card", "epay", "transfer", ""].filter((k) => by[k]);
   if (order.length === 1 && order[0] === "") return null;
   return (
     <div className="pay-stats">

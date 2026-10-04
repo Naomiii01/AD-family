@@ -135,6 +135,7 @@ button.tag{border:0;color:inherit;font-family:inherit;cursor:pointer;line-height
 .tag.pay-cash{background:color-mix(in srgb,var(--long) 14%,var(--surface))}
 .tag.pay-card{background:color-mix(in srgb,var(--dream) 18%,var(--surface))}
 .tag.pay-epay{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
+.tag.pay-transfer{background:color-mix(in srgb,var(--sky) 22%,var(--surface))}
 .tag.pay-none{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:500}
 .pay-pick{display:grid;gap:8px}
 .pay-pick .chips{margin:0}
