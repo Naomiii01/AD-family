@@ -493,3 +493,10 @@ alter table public.families add column if not exists guardian text not null defa
 -- alter table members add column look text not null default 'korean'
 --   check (look in ('korean','herbal','industrial','cute','general'));
 -- create function set_look(p_member uuid, p_look text): self or parent of member may set; granted to authenticated.
+
+-- migration: expense_pay_method
+-- expenses.pay_method text ('' | cash | card | epay), expenses.pay_detail text (bank / e-pay name, ≤20 chars)
+-- _norm_pay(text) accepts cash/card/epay or 現金/信用卡/電子支付.
+-- add_expense_v3(p_member, p_item, p_amount, p_type, p_category, p_jar, p_pay_method, p_pay_detail)
+-- set_expense_pay(p_id, p_pay_method, p_pay_detail): edit payment of an expense in an unclosed month.
+-- quick_add_v2(token, item, amount, type, category, pay_method, pay_detail): service role only; edge function `quick` infers the method from `pay`.

@@ -2,16 +2,17 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
-import { CATS, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
+import { CATS, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
+import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
 
 export function useExpenses(memberId: string, mk: string) {
   const [list, setList] = useState<any[]>([]);
   const load = useCallback(async () => {
-    const { data } = await supabase.from("expenses").select("id,item,amount,type,category,source,spent_on,created_at,jar")
+    const { data } = await supabase.from("expenses").select("id,item,amount,type,category,source,spent_on,created_at,jar,pay_method,pay_detail")
       .eq("member_id", memberId).eq("month", mk).eq("voided", false).order("created_at", { ascending: false });
     setList(data || []);
   }, [memberId, mk]);
@@ -191,6 +192,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const [type, setType] = useState<"need" | "want">("want");
   const [cat, setCat] = useState("飲料點心");
   const [payJar, setPayJar] = useState("free");
+  const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
+  const [editPay, setEditPay] = useState<{ id: string; p: Pay } | null>(null);
   const [busy, setBusy] = useState(false);
   const isCur = mk === curMonth();
   const sp = ex.list.reduce((s, e) => s + e.amount, 0);
@@ -202,13 +205,23 @@ function Active({ app, mo }: { app: App; mo: any }) {
 
   async function add() {
     setBusy(true);
-    const [, e] = await rpc("add_expense_v2", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar });
+    const [, e] = await rpc("add_expense_v3", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar, p_pay_method: pay.m, p_pay_detail: pay.d });
     setBusy(false);
     if (e) return toast(e);
+    rememberPay(sel.id, pay);
     toast("記下來了");
     setItem("");
     setAmt("");
     await Promise.all([ex.reload(), data.reload()]);
+  }
+  async function savePay() {
+    if (!editPay) return;
+    const [, e] = await rpc("set_expense_pay", { p_id: editPay.id, p_pay_method: editPay.p.m, p_pay_detail: editPay.p.d });
+    if (e) return toast(e);
+    rememberPay(sel.id, editPay.p);
+    setEditPay(null);
+    toast("支付方式已更新");
+    await ex.reload();
   }
   async function del(id: string) {
     const [, e] = await rpc("delete_expense", { p_id: id });
@@ -257,6 +270,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <div className="chips" role="group" aria-label="類別">
             {CATS.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
           </div>
+          <div className="small muted">怎麼付的</div>
+          <PayPicker mid={sel.id} value={pay} onChange={setPay} history={ex.list} />
           <div className="seg" role="group" aria-label="需要或想要">
             <button className={type === "need" ? "on" : ""} onClick={() => setType("need")}>需要（非買不可）</button>
             <button className={type === "want" ? "on" : ""} onClick={() => setType("want")}>想要（可以不買）</button>
@@ -279,13 +294,27 @@ function Active({ app, mo }: { app: App; mo: any }) {
             {ex.list.map((e) => (
               <div className="li" key={e.id}>
                 <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span> <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}</span>
+                <span className="t">{e.item} <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span> <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}
+                  {" "}{mo.status === "active"
+                    ? <button className={`tag pay-${e.pay_method || "none"}`} onClick={() => setEditPay(editPay?.id === e.id ? null : { id: e.id, p: { m: e.pay_method || "cash", d: e.pay_detail || "" } })} aria-label={`修改 ${e.item} 的支付方式`}>{payLabel(e) || "＋支付方式"}</button>
+                    : payLabel(e) && <span className={`tag pay-${e.pay_method}`}>{payLabel(e)}</span>}
+                </span>
                 <b className="num">{num(e.amount)}</b>
                 {mo.status === "active" ? <button className="x" onClick={() => del(e.id)} aria-label={`刪除 ${e.item}`}>×</button> : <span />}
+                {editPay?.id === e.id && (
+                  <div className="pay-edit">
+                    <PayPicker mid={sel.id} value={editPay.p} onChange={(p) => setEditPay({ id: e.id, p })} history={ex.list} />
+                    <div className="row" style={{ gap: 8 }}>
+                      <button className="btn sm primary" onClick={savePay}>儲存</button>
+                      <button className="btn sm" onClick={() => setEditPay(null)}>取消</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         ) : <div className="empty">還沒有花費紀錄</div>}
+        <PayStats list={ex.list} />
       </section>
       {mo.status === "active" && <button className="btn big" onClick={() => app.go("review")}>月底了，去做檢討 →</button>}
     </>

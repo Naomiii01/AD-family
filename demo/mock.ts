@@ -157,6 +157,21 @@ const F: Record<string, (a: any) => any> = {
     log(p_member, p_to, p_amount, "從" + jarNm(p_member, p_from) + "移入", curMonth(), "move");
   },
   add_expense_v2: (a) => { needAccess(a.p_member); return addExpense(a, "app"); },
+  add_expense_v3: (a) => {
+    needAccess(a.p_member);
+    const pm = normPay(a.p_pay_method);
+    const r = addExpense(a, "app");
+    const e = db.expenses.find((x) => x.id === r.id)!;
+    e.pay_method = pm; e.pay_detail = pm === "" || pm === "cash" ? "" : String(a.p_pay_detail || "").trim().slice(0, 20);
+    return r;
+  },
+  set_expense_pay: ({ p_id, p_pay_method, p_pay_detail }) => {
+    const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
+    needAccess(e.member_id);
+    const pm = normPay(p_pay_method);
+    if (db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "closed")) fail("這個月已經結算了");
+    e.pay_method = pm; e.pay_detail = pm === "" || pm === "cash" ? "" : String(p_pay_detail || "").trim().slice(0, 20);
+  },
   delete_expense: ({ p_id }) => {
     const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
     needAccess(e.member_id);
@@ -408,6 +423,11 @@ function activeGoal(mid: string) {
 const extraKeys = (mid: string): string[] => (mem(mid).extra_jars || []).map((j: Row) => j.key);
 const jarKeys = (mid: string) => ["free", "dream", "long", ...extraKeys(mid)];
 const jarNm = (mid: string, k: string) => ({ free: "自由罐", dream: "夢想罐", long: "長期罐" } as Row)[k] || (mem(mid).extra_jars || []).find((j: Row) => j.key === k)?.name || k;
+function normPay(v: any): string {
+  const t = String(v ?? "").trim().toLowerCase();
+  const m = ({ "": "", cash: "cash", "現金": "cash", card: "card", "信用卡": "card", epay: "epay", "電子支付": "epay" } as Row)[t];
+  return m === undefined ? fail("支付方式不正確") : m;
+}
 function addExpense({ p_member, p_item, p_amount, p_type, p_category, p_jar }: any, source: string, at?: string, month?: string) {
   const mk = month || curMonth();
   const jar = p_jar || "free";
@@ -422,7 +442,7 @@ function addExpense({ p_member, p_item, p_amount, p_type, p_category, p_jar }: a
   const free = bal(p_member, jar);
   if (p_amount > free) fail(`${jarNm(p_member, jar)}只剩 ${free} 元，這筆錢不夠付`);
   const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type,
-    category: p_category || "其他", source, jar, voided: false, spent_on: at ? at.slice(0, 10) : todayTW(), created_at: at || now() };
+    category: p_category || "其他", source, jar, pay_method: "", pay_detail: "", voided: false, spent_on: at ? at.slice(0, 10) : todayTW(), created_at: at || now() };
   db.expenses.push(row);
   log(p_member, jar, -p_amount, row.item, mk, "expense", at);
   return { id: row.id, left: free - p_amount, jar };

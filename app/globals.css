@@ -131,6 +131,17 @@ label.f{display:grid;gap:4px;font-size:.85rem;color:var(--muted);min-width:0}
 .tag.need{background:color-mix(in srgb,var(--long) 18%,var(--surface))}
 .tag.want{background:color-mix(in srgb,var(--free) 25%,var(--surface))}
 .tag.shortcut{background:color-mix(in srgb,var(--sky) 20%,var(--surface))}
+button.tag{border:0;color:inherit;font-family:inherit;cursor:pointer;line-height:1.5}
+.tag.pay-cash{background:color-mix(in srgb,var(--long) 14%,var(--surface))}
+.tag.pay-card{background:color-mix(in srgb,var(--dream) 18%,var(--surface))}
+.tag.pay-epay{background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
+.tag.pay-none{background:transparent;border:1px dashed var(--line);color:var(--muted);font-weight:500}
+.pay-pick{display:grid;gap:8px}
+.pay-pick .chips{margin:0}
+.pay-other{flex:1;min-width:0}
+.pay-edit{grid-column:1/-1;display:grid;gap:8px;padding:10px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--line) 35%,var(--surface))}
+.pay-stats{display:grid;gap:6px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.ps-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:.9rem}
 .x{border:0;background:transparent;color:var(--muted);font-size:1.1rem;padding:2px 6px}
 .big-n{font-family:var(--f-num,var(--f-display));font-size:1.9rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
 .chart{width:100%;height:auto;display:block}

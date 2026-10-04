@@ -2,6 +2,13 @@ export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 export type Jar = "free" | "dream" | "long";
 export const JARS: Jar[] = ["free", "dream", "long"];
 export const JN: Record<string, string> = { free: "自由罐", dream: "夢想罐", long: "長期罐", keep: "自由罐" };
+export const PAY_METHODS: [string, string][] = [["cash", "現金"], ["card", "信用卡"], ["epay", "電子支付"]];
+export const PAY_NAME: Record<string, string> = { cash: "現金", card: "信用卡", epay: "電子支付" };
+export const PAY_PRESETS: Record<string, string[]> = {
+  card: ["國泰世華", "中國信託", "台新", "玉山", "富邦"],
+  epay: ["LINE Pay", "Apple Pay", "街口", "全支付", "悠遊付"],
+};
+export const payLabel = (e: any) => (e?.pay_method ? e.pay_detail || PAY_NAME[e.pay_method] || "" : "");
 export const CATS = ["飲料點心", "正餐", "交通", "文具學習", "娛樂", "衣物", "禮物", "其他"];
 export const COLORS = ["free", "dream", "long", "sky", "ink"];
 

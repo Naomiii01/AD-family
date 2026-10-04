@@ -94,13 +94,32 @@ export default function QuickSetup({ app }: { app: App }) {
           <li>再加入「<b>從列表中選擇</b>」：確認它寫的是「從 <b>列表</b> 中選擇」（如果顯示「要求…」，點一下改選「列表」），提示寫「想要還是需要？」</li>
           <li>加入動作「<b>URL</b>」，把上面的網址貼進去。</li>
           <li>再加入「<b>取得 URL 內容</b>」（它會自動接上一步的 URL）；方法選「POST」；要求本文選「JSON」，新增 4 個欄位：
-            <div className="mono" style={{ marginTop: 6 }}>token → 貼上記帳碼<br />amount → 「提供的輸入」（第 1 個）<br />item → 「提供的輸入」（第 2 個）<br />type → 「選取的項目」</div>
+            <div className="mono" style={{ marginTop: 6 }}>token → 貼上記帳碼<br />amount → 「提供的輸入」（第 1 個）<br />item → 「提供的輸入」（第 2 個）<br />type → 「選取的項目」<br />pay →（選填）付款方式，例如「LINE Pay」「現金」「國泰」</div>
+            <span className="note">pay 可以直接打字固定一種，也可以像「想要／需要」一樣再做一個列表讓自己選。寫銀行名稱會記成信用卡，寫 LINE Pay、街口、全支付等會記成電子支付。</span>
           </li>
           <li>加入「<b>取得辭典值</b>」：取得「message」的值，來源是「URL 的內容」。</li>
           <li>加入「<b>顯示通知</b>」，內容放「辭典值」。完成後按一次試試看。</li>
           <li>想更快：在捷徑上長按 → 「加入主畫面」；或對 Siri 說「零用金記帳」。</li>
         </ol>
         <p className="note">記帳一樣要先完成本月規劃，自由罐不夠時會顯示剩多少錢。</p>
+      </section>
+
+      <section className="card">
+        <h3>Apple Pay 刷卡自動記帳（iOS 17 以上）</h3>
+        <ol className="steps">
+          <li>捷徑 App 下方點「<b>自動化</b>」→ 右上角 ＋ → 選「<b>錢包</b>」，勾選要記帳的卡片，選「<b>立即執行</b>」→「新增空白捷徑」。</li>
+          <li>加入「列表」（想要、需要）和「從列表中選擇」，跟上面一樣。</li>
+          <li>加入「URL」（貼上網址）和「取得 URL 內容」（POST、JSON），欄位：
+            <div className="mono" style={{ marginTop: 6 }}>token → 記帳碼<br />amount → 「捷徑輸入」→ 貨幣金額<br />item → 「捷徑輸入」→ 商家<br />type → 「所選的項目」<br />pay → 「捷徑輸入」→ 卡片或票卡名稱（會自動記成信用卡）</div>
+          </li>
+          <li>加入「取得辭典值」（message）和「顯示通知」。刷卡後點「想要／需要」就記好了。</li>
+        </ol>
+        <p className="note">在編輯畫面按 ▶ 測試會出現「請輸入金額」，這是正常的（沒有真的刷卡）。</p>
+      </section>
+
+      <section className="card">
+        <h3>LINE Pay 或其他付款：付完一秒記帳</h3>
+        <p className="small">LINE Pay 沒辦法自動觸發捷徑。設定「設定 → 輔助使用 → 觸控 → <b>輕點背面</b> → 點兩下 → 零用金記帳」，付完在手機背面敲兩下就能記。</p>
       </section>
 
       <section className="card">
