@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v8";
+const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; seq: number; uid: string | null };
@@ -21,7 +21,7 @@ function load(): DB {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return seed();
+  return fresh();
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
@@ -480,12 +480,40 @@ export function demoLogin(memberId: string) {
   listeners.forEach((l) => l("SIGNED_IN", { user: { id: db.uid } }));
 }
 export function demoReset() {
-  db = seed();
+  db = fresh();
   save();
   listeners.forEach((l) => l("SIGNED_OUT", null));
 }
 
-function seed(): DB {
+/** Our family with real settings and no records. */
+function fresh(): DB {
+  db = blank();
+  db.families.push({ id: "f1", name: "我們家", code: "AD0001", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0,
+    guardian: "爸爸", star_days: 4, approver: "m2", created_at: now() });
+  const adultJars = () => [{ key: "fixed", name: "固定支出", target: 0 }, { key: "reserve", name: "預備金", target: 0 }];
+  const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
+    db.members.push({ id: mid, family_id: "f1", user_id: "u-" + mid, name, role, allowance, color: "sky", is_owner: owner, archived: false, theme,
+      extra_jars: role === "parent" ? adultJars() : [], dream_tiers: 0, created_at: now() });
+  add("m1", "Naomi", "parent", 0, "morandi", true);
+  add("m2", "Ad", "parent", 0, "earth");
+  add("m3", "Jalen", "kid", 4500, "court");
+  add("m4", "Rebecca", "kid", 4000, "kpop");
+  return db;
+}
+
+/** Backup / restore for the 體驗版, whose records live only in this browser. */
+export function demoExport() {
+  return JSON.stringify(db);
+}
+export function demoImport(text: string) {
+  const o = JSON.parse(text);
+  if (!o || !Array.isArray(o.members) || !Array.isArray(o.ledger)) throw new Error("bad");
+  db = { ...blank(), ...o, uid: null };
+  save();
+  listeners.forEach((l) => l("SIGNED_OUT", null));
+}
+
+export function sampleSeed(): DB {
   db = blank();
   const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", star_days: 4, approver: "m2", created_at: now() };
   db.families.push(fam);

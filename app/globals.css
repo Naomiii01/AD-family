@@ -182,3 +182,4 @@ ul.plain{margin:0;padding-left:1.1em;display:grid;gap:4px;font-size:.92rem}
 :root[data-theme="dark"]{--fixed:#a8b6c9;--reserve:#c4b59d;--c1:#b5c4a2;--c2:#cbb2c0;--c3:#a6c2c0;--c4:#d0bd99;--c5:#b2aecb}
 .trio.more{margin-top:-6px}
 .jm-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--sunk)}
+.ta{font-family:ui-monospace,Menlo,monospace;font-size:.75rem;min-height:90px}
