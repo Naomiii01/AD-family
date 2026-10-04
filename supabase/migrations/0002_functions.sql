@@ -476,3 +476,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- ledger.jar accepts any short key; expenses.jar; members.extra_jars [{key,name,target}];
 -- set_extra_jars (parents only), move_money (not out of dream/long), plan_month_v2 (jsonb ratio over all jars,
 -- free takes the remainder), add_expense_v2 (pay from free or any extra jar), balances.extras.
+
+-- ---------- 2026-10-04: kid dream purchase needs the kid and a parent ----------
+-- Applied as Supabase migration "dream_purchase_dual_approval": goals.buy_kid_at / buy_parent_at / buy_parent_by,
+-- families.approver (null = any parent); approve_buy, cancel_buy, set_approver; buy_goal now calls approve_buy.

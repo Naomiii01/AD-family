@@ -31,6 +31,7 @@ function FamilyCard({ app }: { app: App }) {
   const [mcap, setMcap] = useState(String(family.match_cap));
   const [guard, setGuard] = useState(gd(family));
   const [sdays, setSdays] = useState(String(family.star_days ?? 4));
+  const [appr, setAppr] = useState<string>(family.approver || "");
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
@@ -41,8 +42,10 @@ function FamilyCard({ app }: { app: App }) {
     const [, e3] = await rpc("set_guardian", { p_label: guard });
     if (e3) { setBusy(false); return toast(e3); }
     const [, e4] = await rpc("set_star_days", { p_days: Math.round(+sdays) });
+    if (e4) { setBusy(false); return toast(e4); }
+    const [, e5] = await rpc("set_approver", { p_member: appr || null });
     setBusy(false);
-    if (e4) return toast(e4);
+    if (e5) return toast(e5);
     toast("已更新家庭設定");
     await reloadBase();
     await data.reload();
@@ -63,6 +66,13 @@ function FamilyCard({ app }: { app: App }) {
       </div>
       <label className="f">或自己輸入（例如：阿嬤、Ad）<input id="f-guard" maxLength={10} value={guard} onChange={(e) => setGuard(e.target.value)} /></label>
       <p className="note">App 裡的加碼、配對、理財約定和檢討提醒，都會用這個稱呼。</p>
+      <h3>誰同意孩子買夢想</h3>
+      <label className="f">孩子要買夢想時，需要孩子本人和這位家長都同意
+        <select id="f-appr" value={appr} onChange={(e) => setAppr(e.target.value)}>
+          <option value="">任何一位家長</option>
+          {app.members.filter((m) => m.role === "parent").map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </label>
       <h3>星星條件</h3>
       <label className="f">每週至少記帳幾天（0 = 不要求）<input id="f-sdays" type="number" inputMode="numeric" min={0} max={7} value={sdays} onChange={(e) => setSdays(e.target.value)} /></label>
       <p className="note">月底結算時，每週都達成，而且回答了檢討問題，才拿得到星星。</p>

@@ -5,7 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const MEMBER_COLS = "*";
-const KEY = "adf-demo-v7";
+const KEY = "adf-demo-v8";
 
 type Row = Record<string, any>;
 type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; seq: number; uid: string | null };
@@ -174,16 +174,39 @@ const F: Record<string, (a: any) => any> = {
     if (!g?.pending_at) fail("沒有等待中的更換");
     const override = amParent() && meRow().id !== p_member;
     if (Date.now() - new Date(g.pending_at).getTime() < 7 * 864e5 && !override) fail("冷靜期還沒結束");
-    Object.assign(g, { name: g.pending_name, price: g.pending_price, bonus_given: false, pending_name: null, pending_price: null, pending_at: null });
+    Object.assign(g, { name: g.pending_name, price: g.pending_price, bonus_given: false, pending_name: null, pending_price: null, pending_at: null, buy_kid_at: null, buy_parent_at: null, buy_parent_by: null });
   },
   cancel_goal_change: ({ p_member }) => { needAccess(p_member); const g = activeGoal(p_member); if (g) Object.assign(g, { pending_name: null, pending_price: null, pending_at: null }); },
-  buy_goal: ({ p_member }) => {
+  buy_goal: (args) => F.approve_buy(args),
+  approve_buy: ({ p_member }) => {
     needAccess(p_member);
     const g = activeGoal(p_member) || fail("還沒有設定夢想");
     if (bal(p_member, "dream") < g.price) fail("夢想罐還不夠");
-    log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
-    Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
-    Object.assign(mem(p_member), { dream_tiers: 0, dream_reset_at: now() });
+    const m = mem(p_member), me = meRow();
+    const doBuy = () => {
+      log(p_member, "dream", -g.price, "買下：" + g.name, curMonth(), "goal");
+      Object.assign(g, { status: "achieved", achieved_at: now(), pending_name: null, pending_price: null, pending_at: null });
+      Object.assign(m, { dream_tiers: 0, dream_reset_at: now() });
+      return "bought";
+    };
+    if (m.role === "parent") return doBuy();
+    const f = famOf(p_member);
+    if (me.id === p_member) g.buy_kid_at = now();
+    else {
+      if (f.approver && f.approver !== me.id) fail(`這個家的夢想購買要由 ${mem(f.approver).name} 同意`);
+      Object.assign(g, { buy_parent_at: now(), buy_parent_by: me.id });
+    }
+    return g.buy_kid_at && g.buy_parent_at ? doBuy() : "waiting";
+  },
+  cancel_buy: ({ p_member }) => {
+    needAccess(p_member);
+    const g = activeGoal(p_member);
+    if (g) Object.assign(g, { buy_kid_at: null, buy_parent_at: null, buy_parent_by: null });
+  },
+  set_approver: ({ p_member }) => {
+    if (!amParent()) fail("只有家長可以做這件事");
+    if (p_member && mem(p_member)?.role !== "parent") fail("請選一位家長");
+    db.families.find((f) => f.id === myFam()).approver = p_member || null;
   },
   week_progress: ({ p_member, p_month }) => { needAccess(p_member); return weekProgress(p_member, p_month); },
   no_spend_today: ({ p_member }) => {
@@ -464,7 +487,7 @@ export function demoReset() {
 
 function seed(): DB {
   db = blank();
-  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", star_days: 4, created_at: now() };
+  const fam = { id: "f1", name: "我們家", code: "DEMO26", rate: 0, bonus_pct: 10, bonus_step: 5000, long_min: 500, match_pct: 100, match_cap: 0, guardian: "爸爸", star_days: 4, approver: "m2", created_at: now() };
   db.families.push(fam);
   const adultJars = [{ key: "fixed", name: "固定支出", target: 0 }, { key: "reserve", name: "預備金", target: 200000 }];
   const add = (mid: string, name: string, role: string, allowance: number, theme: string, owner = false) =>
@@ -524,6 +547,7 @@ function seed(): DB {
     `每月零用金 NT$ ${amt}，每月 1 日約定轉帳（若遇銀行休假，延到下一個工作日）。`,
     "每月最後一天和爸爸一起做結算和檢討，並設定下個月的罐子分配（長期罐每月最少 NT$ 500，爸爸配對同樣金額）。",
     "要買高於 NT$ 1,000 的東西，需要先和爸爸討論。",
+    "夢想罐存滿後，要由自己和爸爸一起同意才能買下夢想。",
     "每人每季可以預支一次，預支後的下一個月從零用金扣除。",
     "花了錢當天記帳，每週檢視有沒有遺漏；每週至少記帳 4 天。",
     "大考成績和爸爸討論：高於＿＿分，加碼＿＿元；低於＿＿分，扣＿＿元。",

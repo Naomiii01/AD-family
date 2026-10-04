@@ -39,6 +39,7 @@ export default function Rules({ app }: { app: App }) {
               <li>{gd(family)}給的加碼本身不算進關卡，只算自己存的錢。</li>
               <li>夢想罐的錢花掉後，關卡從 0 重新開始算。</li>
               <li>想換夢想要先冷靜 7 天，7 天後還是想換再確認。</li>
+              <li><b>買下夢想要兩個人同意</b>：存滿後，你和{family.approver ? (app.members.find((m) => m.id === family.approver)?.name || gd(family)) : gd(family)}都按「同意」才會買，只有一方同意不行。</li>
             </ul>
           </div>
         </div>

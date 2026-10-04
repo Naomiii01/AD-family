@@ -160,7 +160,9 @@ function DreamCard({ app }: { app: App }) {
         <div className="celebrate">
           <h3>存到了！</h3>
           <p className="small">夢想罐已經夠買「{g.name}」。買下後會從夢想罐扣掉 {fmt(g.price)}。</p>
-          <Confirm label="買下夢想" confirmLabel="確定買下" className="btn primary" onConfirm={() => act("buy_goal", { p_member: sel.id }, "恭喜完成夢想！")} />
+          {sel.role === "kid" ? <BuyApproval app={app} g={g} busy={busy} act={act} /> : (
+            <Confirm label="買下夢想" confirmLabel="確定買下" className="btn primary" onConfirm={() => act("approve_buy", { p_member: sel.id }, "恭喜完成夢想！")} />
+          )}
         </div>
       ) : (
         <>
@@ -344,5 +346,36 @@ function MoveMoney({ app }: { app: App }) {
       <div><button className="btn primary" disabled={busy || !(+amt > 0)} onClick={go}>移過去</button></div>
       <p className="note">夢想罐和長期罐的錢只能放進去，不能移出來。</p>
     </section>
+  );
+}
+
+function BuyApproval({ app, g, busy, act }: { app: App; g: any; busy: boolean; act: (fn: string, args: any, ok: string) => Promise<void> }) {
+  const { sel, me, isSelf, isParent, family, members } = app;
+  const approver = members.find((m) => m.id === family.approver);
+  const parentLabel = approver ? approver.name : gd(family);
+  const canParent = isParent && !isSelf && (!family.approver || family.approver === me.id);
+  const kidOk = !!g.buy_kid_at, parOk = !!g.buy_parent_at;
+  const parName = members.find((m) => m.id === g.buy_parent_by)?.name || parentLabel;
+  const ok = (both: boolean) => (both ? "恭喜完成夢想！" : "已同意，等另一方同意");
+  return (
+    <>
+      <p className="small">要兩個人都同意才能買：{sel.name}本人和{parentLabel}。</p>
+      <div className="sign">
+        <div className={kidOk ? "done" : ""}>
+          <b>{sel.name}</b>
+          {kidOk ? <span className="small muted">已同意</span>
+            : isSelf ? <Confirm label="我確定要買" confirmLabel="確定" className="btn primary sm" disabled={busy} onConfirm={() => act("approve_buy", { p_member: sel.id }, ok(parOk))} />
+            : <span className="small muted">等 {sel.name} 同意</span>}
+        </div>
+        <div className={parOk ? "done" : ""}>
+          <b>{parOk ? parName : parentLabel}</b>
+          {parOk ? <span className="small muted">已同意</span>
+            : canParent ? <Confirm label="我同意購買" confirmLabel="確定" className="btn primary sm" disabled={busy} onConfirm={() => act("approve_buy", { p_member: sel.id }, ok(kidOk))} />
+            : <span className="small muted">等 {parentLabel} 同意</span>}
+        </div>
+      </div>
+      {(kidOk || parOk) && <div><button className="btn sm ghost" disabled={busy} onClick={() => act("cancel_buy", { p_member: sel.id }, "已取消，重新考慮")}>再想想，取消同意</button></div>}
+      <p className="note">兩邊都同意後，會自動從夢想罐扣掉 {fmt(g.price)}。</p>
+    </>
   );
 }
