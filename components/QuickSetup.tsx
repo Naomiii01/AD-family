@@ -92,7 +92,8 @@ export default function QuickSetup({ app }: { app: App }) {
           <li>再加入「<b>要求輸入</b>」：類型「文字」，提示寫「買了什麼？」</li>
           <li>加入動作「<b>列表</b>」，把兩個項目改成「想要」「需要」。</li>
           <li>再加入「<b>從列表中選擇</b>」：確認它寫的是「從 <b>列表</b> 中選擇」（如果顯示「要求…」，點一下改選「列表」），提示寫「想要還是需要？」</li>
-          <li>加入「<b>取得 URL 內容</b>」：網址貼上上面的網址；方法選「POST」；要求本文選「JSON」，新增 4 個欄位：
+          <li>加入動作「<b>URL</b>」，把上面的網址貼進去。</li>
+          <li>再加入「<b>取得 URL 內容</b>」（它會自動接上一步的 URL）；方法選「POST」；要求本文選「JSON」，新增 4 個欄位：
             <div className="mono" style={{ marginTop: 6 }}>token → 貼上記帳碼<br />amount → 「提供的輸入」（第 1 個）<br />item → 「提供的輸入」（第 2 個）<br />type → 「選取的項目」</div>
           </li>
           <li>加入「<b>取得辭典值</b>」：取得「message」的值，來源是「URL 的內容」。</li>
