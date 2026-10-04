@@ -21,13 +21,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant-TW">
+    <html lang="zh-Hant-TW" data-look="korean">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&family=Huninn&family=LXGW+WenKai+TC:wght@400;700&family=IBM+Plex+Mono:wght@500;700&display=swap"
         />
       </head>
       <body>{children}</body>

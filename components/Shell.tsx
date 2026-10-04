@@ -4,7 +4,7 @@ import { supabase, MEMBER_COLS } from "@/lib/supabase";
 import { curMonth, store } from "@/lib/util";
 import { useMember, MemberData } from "@/lib/useMember";
 import { Avatar, ICONS } from "./ui";
-import { SKINS, skinOf, applySkin } from "@/lib/themes";
+import { SKINS, skinOf, lookOf, applySkin } from "@/lib/themes";
 import Jars from "./Jars";
 import Month from "./Month";
 import Review from "./Review";
@@ -69,7 +69,7 @@ export default function Shell({ userId }: { userId: string }) {
     if (w) setWelcome(w);
   }, [reloadBase]);
 
-  useEffect(() => { applySkin(skinOf(me)); return () => applySkin("morandi"); }, [me?.theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { applySkin(skinOf(me), lookOf(me)); return () => applySkin("morandi"); }, [me?.theme, me?.look]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sel = members.find((x) => x.id === selId) || me;
   const data = useMember(sel?.id);

@@ -488,3 +488,8 @@ alter table public.families add column if not exists guardian text not null defa
 -- ---------- 2026-10-04: plan by NT$ amounts ----------
 -- Applied as Supabase migration "plan_month_by_amounts": plan_month_amt(member, month, p_income, extra, note, p_amounts jsonb);
 -- each non-free jar gets its amount, free takes the remainder, ratio is stored as rounded percentages for display.
+
+-- migration: member_look_style
+-- alter table members add column look text not null default 'korean'
+--   check (look in ('korean','herbal','industrial','cute','general'));
+-- create function set_look(p_member uuid, p_look text): self or parent of member may set; granted to authenticated.

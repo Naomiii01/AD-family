@@ -30,7 +30,7 @@ const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const html = `<title>三罐零用金</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&family=Huninn&family=LXGW+WenKai+TC:wght@400;700&family=IBM+Plex+Mono:wght@500;700&display=swap">
 <style>${css}
 body{padding-top:0}
 </style>

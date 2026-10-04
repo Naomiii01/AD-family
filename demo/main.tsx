@@ -72,4 +72,5 @@ function Root() {
   return uid ? <Shell key={uid} userId={uid} /> : <Picker />;
 }
 
+document.documentElement.setAttribute("data-look", "korean");
 createRoot(document.getElementById("root")!).render(<Root />);

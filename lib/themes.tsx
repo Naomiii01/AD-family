@@ -46,8 +46,19 @@ export const SKINS: Record<SkinKey, {
 
 export const skinOf = (m: any): SkinKey => (m?.theme && m.theme in SKINS ? m.theme : "morandi");
 
-export function applySkin(key: SkinKey) {
+export type LookKey = "korean" | "herbal" | "industrial" | "cute" | "general";
+export const LOOKS: Record<LookKey, { name: string; desc: string }> = {
+  korean: { name: "簡約韓系", desc: "大量留白、柔和陰影、圓潤按鈕" },
+  herbal: { name: "草本日系", desc: "手寫感字體、細線與和紙點點" },
+  industrial: { name: "工業風", desc: "粗框直角、等寬數字、網格背景" },
+  cute: { name: "可愛Q版", desc: "粉圓字體、貼紙邊框、會搖的罐子" },
+  general: { name: "一般", desc: "原本的圓角卡片樣式" },
+};
+export const lookOf = (m: any): LookKey => (m?.look && m.look in LOOKS ? m.look : "korean");
+
+export function applySkin(key: SkinKey, look: LookKey = "korean") {
   if (typeof document === "undefined") return;
   if (key === "morandi") document.documentElement.removeAttribute("data-skin");
   else document.documentElement.setAttribute("data-skin", key);
+  document.documentElement.setAttribute("data-look", look);
 }

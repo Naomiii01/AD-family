@@ -338,6 +338,11 @@ const F: Record<string, (a: any) => any> = {
     if (mem(p_member).role === "parent" && p_pin.length < 6) fail("家長的密碼至少 6 位數字");
   },
   set_theme: ({ p_member, p_theme }) => { needAccess(p_member); mem(p_member).theme = p_theme; },
+  set_look: ({ p_member, p_look }) => {
+    needAccess(p_member);
+    if (!["korean", "herbal", "industrial", "cute", "general"].includes(p_look)) fail("風格不正確");
+    mem(p_member).look = p_look;
+  },
   save_year_plan: ({ p_member, p_year, p_data }) => {
     needAccess(p_member);
     const y = db.year_plans.find((x) => x.member_id === p_member && x.year === p_year);

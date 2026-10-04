@@ -7,7 +7,7 @@ import Rules from "./Rules";
 import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
 import JarManager from "./JarManager";
-import { SKINS, SkinKey, skinOf } from "@/lib/themes";
+import { SKINS, SkinKey, skinOf, LOOKS, LookKey, lookOf } from "@/lib/themes";
 import { gd, jarList } from "@/lib/util";
 
 export default function More({ app }: { app: App }) {
@@ -35,7 +35,7 @@ export default function More({ app }: { app: App }) {
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
   items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
-  items.push(["skin", "色", "accent", "畫面主題" + who, `目前是「${SKINS[skinOf(sel)].name}」`]);
+  items.push(["skin", "色", "accent", "畫面風格與配色" + who, `${LOOKS[lookOf(sel)].name} · ${SKINS[skinOf(sel)].name}`]);
   if (isParent) items.push(["parent", "家", "free", "家長設定", "家人、零用金、密碼、獎勵、家庭銀行規則"]);
   items.push(["pin", "密", "ink", "更改我的登入密碼", `${me.name} 的 4 到 8 位數字密碼`]);
   return (
@@ -82,31 +82,58 @@ function MyPin({ app }: { app: App }) {
 }
 
 function SkinPicker({ app }: { app: App }) {
-  const { sel, me, isSelf, toast, reloadBase } = app;
+  const { sel, isSelf, toast, reloadBase } = app;
   const cur = skinOf(sel);
+  const curLook = lookOf(sel);
   async function pick(k: SkinKey) {
     const [, e] = await rpc("set_theme", { p_member: sel.id, p_theme: k });
     if (e) return toast(e);
-    toast(`已換成「${SKINS[k].name}」`);
+    toast(`配色換成「${SKINS[k].name}」`);
+    await reloadBase();
+  }
+  async function pickLook(k: LookKey) {
+    const [, e] = await rpc("set_look", { p_member: sel.id, p_look: k });
+    if (e) return toast(e);
+    toast(`風格換成「${LOOKS[k].name}」`);
     await reloadBase();
   }
   return (
-    <section className="card">
-      <h2>畫面主題{isSelf ? "" : `（${sel.name}）`}</h2>
-      <p className="small muted">{isSelf ? "選一個你喜歡的配色，只會改變你自己看到的畫面。" : `幫 ${sel.name} 選配色，${sel.name} 登入後會看到。你自己的畫面不會變。`}</p>
-      <div className="skin-pick">
-        {(Object.keys(SKINS) as SkinKey[]).map((k) => {
-          const t = SKINS[k];
-          return (
-            <button key={k} className={cur === k ? "on" : ""} style={{ background: t.bg, color: t.ink, ["--free" as any]: t.jars[0], ["--ink" as any]: t.ink, ["--surface" as any]: t.surface }} onClick={() => pick(k)} aria-pressed={cur === k}>
-              <span className="row" style={{ gap: 6, color: t.accent }}>{t.motif}<b style={{ color: t.ink }}>{t.name}</b></span>
-              <span className="sw">{t.jars.map((c) => <i key={c} style={{ background: c }} />)}<i style={{ background: t.accent }} /></span>
-              <span style={{ fontSize: ".78rem", opacity: 0.8 }}>{t.desc}</span>
+    <>
+      <section className="card">
+        <h2>畫面風格{isSelf ? "" : `（${sel.name}）`}</h2>
+        <p className="small muted">{isSelf ? "選你喜歡的樣子，只會改變你自己看到的畫面。風格和配色可以自由搭配。" : `幫 ${sel.name} 選，${sel.name} 登入後會看到。你自己的畫面不會變。`}</p>
+        <div className="look-pick">
+          {(Object.keys(LOOKS) as LookKey[]).map((k) => (
+            <button key={k} className={`look-opt ${curLook === k ? "on" : ""}`} onClick={() => pickLook(k)} aria-pressed={curLook === k}>
+              <div className="lk" data-look={k}>
+                <div className="card">
+                  <div className="card-h"><h3>{LOOKS[k].name}</h3>{curLook === k && <span className="pill active">使用中</span>}</div>
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <span className="big-n" style={{ color: "var(--free)" }}>NT$ 1,250</span>
+                    <span className="btn primary sm">記下來</span>
+                  </div>
+                  <span className="note">{LOOKS[k].desc}</span>
+                </div>
+              </div>
             </button>
-          );
-        })}
-      </div>
-      {!isSelf && me && <p className="note">提示：每個人可以在自己的「更多 → 畫面主題」自己換。</p>}
-    </section>
+          ))}
+        </div>
+      </section>
+      <section className="card">
+        <h2>配色</h2>
+        <div className="skin-pick">
+          {(Object.keys(SKINS) as SkinKey[]).map((k) => {
+            const t = SKINS[k];
+            return (
+              <button key={k} className={cur === k ? "on" : ""} style={{ background: t.bg, color: t.ink, ["--free" as any]: t.jars[0], ["--ink" as any]: t.ink, ["--surface" as any]: t.surface }} onClick={() => pick(k)} aria-pressed={cur === k}>
+                <span className="row" style={{ gap: 6, color: t.accent }}>{t.motif}<b style={{ color: t.ink }}>{t.name}</b></span>
+                <span className="sw">{t.jars.map((c) => <i key={c} style={{ background: c }} />)}<i style={{ background: t.accent }} /></span>
+                <span style={{ fontSize: ".78rem", opacity: 0.8 }}>{t.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </>
   );
 }

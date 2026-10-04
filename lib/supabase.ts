@@ -11,7 +11,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 export const QUICK_URL = `${SUPABASE_URL}/functions/v1/quick`;
 
-export const MEMBER_COLS = "id,family_id,user_id,name,role,allowance,color,is_owner,archived,theme,extra_jars,created_at";
+export const MEMBER_COLS = "id,family_id,user_id,name,role,allowance,color,is_owner,archived,theme,look,extra_jars,created_at";
 
 /** Calls a database function and returns [data, errorMessage]. */
 export async function rpc<T = any>(fn: string, args: Record<string, unknown> = {}): Promise<[T | null, string | null]> {
