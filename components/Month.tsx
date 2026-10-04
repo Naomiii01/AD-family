@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
-import { CATS, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
+import { catsFor, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
@@ -214,6 +214,13 @@ function Active({ app, mo }: { app: App; mo: any }) {
     setAmt("");
     await Promise.all([ex.reload(), data.reload()]);
   }
+  function pickJar(k: string) {
+    if ((k === "fixed") !== (payJar === "fixed")) {
+      setCat(catsFor(k)[0]);
+      setType(k === "fixed" ? "need" : "want");
+    }
+    setPayJar(k);
+  }
   async function savePay() {
     if (!editPay) return;
     const [, e] = await rpc("set_expense_pay", { p_id: editPay.id, p_pay_method: editPay.p.m, p_pay_detail: editPay.p.d });
@@ -260,15 +267,15 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <h3 style={{ marginTop: 6 }}>記一筆花費</h3>
           {payJars.length > 1 && (
             <div className="seg" role="group" aria-label="從哪個罐子付">
-              {payJars.map((j) => <button key={j.key} className={payJar === j.key ? "on" : ""} onClick={() => setPayJar(j.key)}>{j.name}</button>)}
+              {payJars.map((j) => <button key={j.key} className={payJar === j.key ? "on" : ""} onClick={() => pickJar(j.key)}>{j.name}</button>)}
             </div>
           )}
           <div className="grid2">
-            <label className="f">買了什麼<input id="e-item" maxLength={40} placeholder="例如：手搖飲" value={item} onChange={(e) => setItem(e.target.value)} /></label>
+            <label className="f">買了什麼<input id="e-item" maxLength={40} placeholder={payJar === "fixed" ? "例如：10月房租" : "例如：手搖飲"} value={item} onChange={(e) => setItem(e.target.value)} /></label>
             <label className="f">多少錢<input id="e-amt" type="number" inputMode="numeric" min={1} placeholder="60" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
           </div>
           <div className="chips" role="group" aria-label="類別">
-            {CATS.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
+            {catsFor(payJar).map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
           </div>
           <div className="small muted">怎麼付的</div>
           <PayPicker mid={sel.id} value={pay} onChange={setPay} history={ex.list} />
