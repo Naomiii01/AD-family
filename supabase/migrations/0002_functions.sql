@@ -480,3 +480,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- ---------- 2026-10-04: kid dream purchase needs the kid and a parent ----------
 -- Applied as Supabase migration "dream_purchase_dual_approval": goals.buy_kid_at / buy_parent_at / buy_parent_by,
 -- families.approver (null = any parent); approve_buy, cancel_buy, set_approver; buy_goal now calls approve_buy.
+
+-- ---------- 2026-10-04: adults enter this month's salary ----------
+-- Applied as Supabase migration "plan_month_v3_salary": plan_month_v3(member, month, p_income, extra, note, ratio);
+-- for parents p_income replaces the stored allowance, kids always use the allowance set by a parent.

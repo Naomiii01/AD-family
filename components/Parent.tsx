@@ -249,7 +249,7 @@ function MemberRow({ app, m }: { app: App; m: any }) {
   return (
     <div className="sug">
       <button className="row" style={{ border: 0, background: "transparent", padding: 0, justifyContent: "space-between", width: "100%" }} onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="row"><Avatar m={{ name, theme }} /><b>{m.name}</b><span className="small muted">{m.role === "parent" ? "家長" : "孩子"} · 每月 {fmt(m.allowance)}</span></span>
+        <span className="row"><Avatar m={{ name, theme }} /><b>{m.name}</b><span className="small muted">{m.role === "parent" ? "家長" : "孩子"}{m.role === "parent" ? "" : ` · 每月 ${fmt(m.allowance)}`}</span></span>
         <span className="muted">{open ? "收起" : "編輯"}</span>
       </button>
       {open && (
@@ -257,7 +257,7 @@ function MemberRow({ app, m }: { app: App; m: any }) {
           <div className="grid2">
             <label className="f">名字<input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} /></label>
             <label className="f">身分<select value={role} disabled={m.is_owner} onChange={(e) => setRole(e.target.value)}><option value="kid">孩子</option><option value="parent">家長</option></select></label>
-            <label className="f">每月零用金<input type="number" inputMode="numeric" min={0} value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
+            <label className="f">{role === "parent" ? "每月薪資（預設值）" : "每月零用金"}<input type="number" inputMode="numeric" min={0} value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
             <label className="f">畫面主題<select value={theme} onChange={(e) => setTheme(e.target.value)}>{(Object.keys(SKINS) as SkinKey[]).map((k) => <option key={k} value={k}>{SKINS[k].name}</option>)}</select></label>
           </div>
           <div><button className="btn primary sm" disabled={!dirty} onClick={save}>儲存變更</button></div>
@@ -298,7 +298,7 @@ function AddMember({ app }: { app: App }) {
       <div className="grid2">
         <label className="f">名字<input id="n-name" maxLength={20} placeholder="例如：家人的名字" value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="f">身分<select id="n-role" value={role} onChange={(e) => setRole(e.target.value)}><option value="kid">孩子</option><option value="parent">家長（看得到全家）</option></select></label>
-        <label className="f">每月零用金<input id="n-allow" type="number" inputMode="numeric" min={0} placeholder="1500" value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
+        <label className="f">{role === "parent" ? "每月薪資（可不填）" : "每月零用金"}<input id="n-allow" type="number" inputMode="numeric" min={0} placeholder="1500" value={allow} onChange={(e) => setAllow(e.target.value)} /></label>
       </div>
       <label className="f">登入密碼（{role === "parent" ? "家長 6–8" : "孩子 4–8"} 位數字）<input id="n-pin" type="password" inputMode="numeric" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} /></label>
       <div><button className="btn primary" disabled={busy || !name.trim() || pin.length < (role === "parent" ? 6 : 4)} onClick={add}>{busy ? "新增中…" : "新增"}</button></div>

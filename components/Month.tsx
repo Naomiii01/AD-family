@@ -38,6 +38,8 @@ function Plan({ app }: { app: App }) {
   const jars = jarList(sel);
   const [r, setR] = useState<Record<string, number>>(() => startRatio(sel, last?.ratio));
   const [extra, setExtra] = useState("");
+  const isAdult = sel.role === "parent";
+  const [salary, setSalary] = useState(String(sel.allowance || ""));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [adv, setAdv] = useState(0);
@@ -45,7 +47,7 @@ function Plan({ app }: { app: App }) {
     supabase.from("advances").select("amount,repay_month,repaid").eq("member_id", sel.id).eq("repaid", false)
       .then(({ data: rows }: any) => setAdv((rows || []).filter((x: any) => x.repay_month <= mk).reduce((t: number, x: any) => t + x.amount, 0)));
   }, [sel.id, mk]);
-  const base = Math.max(0, sel.allowance - adv);
+  const base = isAdult ? Math.max(0, Math.round(+salary) || 0) : Math.max(0, sel.allowance - adv);
   const total = base + (Math.max(0, Math.round(+extra)) || 0);
   const a = split(total, r);
   const g = data.goal;
@@ -76,8 +78,8 @@ function Plan({ app }: { app: App }) {
 
   async function confirm() {
     setBusy(true);
-    const [, e] = await rpc("plan_month_v2", {
-      p_member: sel.id, p_month: mk, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note, p_ratio: r,
+    const [, e] = await rpc("plan_month_v3", {
+      p_member: sel.id, p_month: mk, p_income: isAdult ? base : null, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note, p_ratio: r,
     });
     setBusy(false);
     if (e) return toast(e);
@@ -127,17 +129,24 @@ function Plan({ app }: { app: App }) {
     <>
       <section className="card">
         <h3>1. 這個月有多少錢</h3>
-        <div className="kv"><span>零用金（家長設定）</span><b>{fmt(sel.allowance)}</b></div>
-        {adv > 0 && <div className="kv"><span>扣回上次預支</span><b style={{ color: "var(--warn)" }}>−{fmt(adv)}</b></div>}
+        {isAdult ? (
+          <label className="f">這個月的薪資收入<input id="p-salary" type="number" inputMode="numeric" min={0} placeholder="例如 45000" value={salary} onChange={(e) => setSalary(e.target.value)} /></label>
+        ) : (
+          <div className="kv"><span>零用金（{gd(app.family)}設定）</span><b>{fmt(sel.allowance)}</b></div>
+        )}
+        {!isAdult && adv > 0 && <div className="kv"><span>扣回上次預支</span><b style={{ color: "var(--warn)" }}>−{fmt(adv)}</b></div>}
         <div className="grid2">
-          <label className="f">額外收入<input id="p-ext" type="number" inputMode="numeric" min={0} placeholder="0" value={extra} onChange={(e) => setExtra(e.target.value)} /></label>
-          <label className="f">來源<input id="p-note" maxLength={40} placeholder="紅包、打工、獎學金" value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          <label className="f">{isAdult ? "其他收入" : "額外收入"}<input id="p-ext" type="number" inputMode="numeric" min={0} placeholder="0" value={extra} onChange={(e) => setExtra(e.target.value)} /></label>
+          <label className="f">來源<input id="p-note" maxLength={40} placeholder={isAdult ? "獎金、兼職、利息" : "紅包、打工、獎學金"} value={note} onChange={(e) => setNote(e.target.value)} /></label>
         </div>
         <div className="kv"><span className="muted">本月總共</span><b>{fmt(total)}</b></div>
       </section>
       <section className="card">
         <h3>2. 分配到{jars.length === 3 ? "三" : ` ${jars.length} `}個罐子</h3>
         <div className="alloc">{jars.map((j) => row(j.key))}</div>
+        {app.isParent && (
+          <div><button className="btn sm" onClick={() => app.go("more", "jars")}>＋ 新增或移除罐子</button></div>
+        )}
         {jars.length === 3 && <div className="row">
           <span className="small muted">快速選：</span>
           <button className="btn sm" onClick={() => setR({ free: 50, dream: 30, long: 20 })}>均衡 5:3:2</button>
@@ -169,7 +178,7 @@ function Plan({ app }: { app: App }) {
       )}
       <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev || lowLong} onClick={confirm}>確認本月規劃，放進罐子</button>
       <p className="note center">確認後錢會放進罐子，這個月的比例就不能再改。</p>
-      {sel.allowance === 0 && <p className="note center">零用金目前是 0 元，請家長到「更多 → 家長設定」設定金額。</p>}
+      {!isAdult && sel.allowance === 0 && <p className="note center">零用金目前是 0 元，請家長到「更多 → 家長設定」設定金額。</p>}
     </>
   );
 }

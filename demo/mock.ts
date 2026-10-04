@@ -60,7 +60,8 @@ const F: Record<string, (a: any) => any> = {
       dream_tiers: mem(p_member).dream_tiers || 0, last_expense: ex[ex.length - 1] || null,
       extras: Object.fromEntries(extraKeys(p_member).map((k) => [k, bal(p_member, k)])) };
   },
-  plan_month_v2: ({ p_member, p_month, p_extra, p_extra_note, p_ratio }) => {
+  plan_month_v3: (args) => F.plan_month_v2(args),
+  plan_month_v2: ({ p_member, p_month, p_income, p_extra, p_extra_note, p_ratio }) => {
     needAccess(p_member);
     const keys = jarKeys(p_member);
     for (const k of Object.keys(p_ratio || {})) if (!keys.includes(k)) fail("沒有這個罐子：" + k);
@@ -72,7 +73,7 @@ const F: Record<string, (a: any) => any> = {
     if (db.months.some((m) => m.member_id === p_member && m.month === p_month)) fail("這個月已經規劃過了");
     const open = db.months.filter((m) => m.member_id === p_member && m.status === "active" && m.month < p_month).sort((a, b) => (a.month < b.month ? -1 : 1))[0];
     if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
-    let inc = mem(p_member).allowance;
+    let inc = mem(p_member).role === "parent" && p_income != null ? Math.max(0, Math.round(p_income)) : mem(p_member).allowance;
     const adv = db.advances.find((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
     if (adv) { inc = Math.max(0, inc - adv.amount); adv.repaid = true; }
     const total = inc + (p_extra || 0);
