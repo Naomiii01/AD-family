@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc, fn } from "@/lib/supabase";
-import { JN, fmt, curMonth, gd } from "@/lib/util";
+import { JN, fmt, curMonth, gd, jarList, jarName } from "@/lib/util";
 import { SKINS, SkinKey } from "@/lib/themes";
 import { Avatar, Confirm, copyText, Stars } from "./ui";
 
@@ -172,7 +172,8 @@ function Reward({ app }: { app: App }) {
     const [, e] = await rpc("give_reward", { p_member: who, p_jar: jar, p_amount: Math.round(+amt), p_note: note });
     setBusy(false);
     if (e) return toast(e);
-    toast(`已放進${members.find((m) => m.id === who)?.name}的${JN[jar]}`);
+    const wm = members.find((m) => m.id === who);
+    toast(`已放進${wm?.name}的${jarName(wm, jar)}`);
     setAmt("");
     setNote("");
     if (who === sel.id) await data.reload();
@@ -181,8 +182,8 @@ function Reward({ app }: { app: App }) {
     <section className="card">
       <h2>加一筆獎勵或紅包</h2>
       <div className="grid2">
-        <label className="f">給誰<select id="r-who" value={who} onChange={(e) => setWho(e.target.value)}>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-        <label className="f">放進哪個罐子<select id="r-jar" value={jar} onChange={(e) => setJar(e.target.value)}><option value="free">自由罐</option><option value="dream">夢想罐</option><option value="long">長期罐</option></select></label>
+        <label className="f">給誰<select id="r-who" value={who} onChange={(e) => { setWho(e.target.value); setJar("long"); }}>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        <label className="f">放進哪個罐子<select id="r-jar" value={jar} onChange={(e) => setJar(e.target.value)}>{jarList(members.find((m) => m.id === who)).map((j) => <option key={j.key} value={j.key}>{j.name}</option>)}</select></label>
         <label className="f">金額<input id="r-amt" type="number" inputMode="numeric" min={1} placeholder="500" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
         <label className="f">原因<input id="r-note" maxLength={40} placeholder="例如：段考進步獎勵" value={note} onChange={(e) => setNote(e.target.value)} /></label>
       </div>

@@ -175,3 +175,10 @@ ul.plain{margin:0;padding-left:1.1em;display:grid;gap:4px;font-size:.92rem}
 .err{color:var(--warn);font-size:.88rem}
 @media (max-width:400px){.ev{grid-template-columns:minmax(0,1fr) 70px;}.ev .evm{grid-column:1}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* extra jars (fixed costs, reserve, custom) */
+:root{--fixed:#8f9db1;--reserve:#a99a83;--c1:#9fae8c;--c2:#b39aa8;--c3:#8eaaa8;--c4:#b8a582;--c5:#9a96b4}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--fixed:#a8b6c9;--reserve:#c4b59d;--c1:#b5c4a2;--c2:#cbb2c0;--c3:#a6c2c0;--c4:#d0bd99;--c5:#b2aecb}}
+:root[data-theme="dark"]{--fixed:#a8b6c9;--reserve:#c4b59d;--c1:#b5c4a2;--c2:#cbb2c0;--c3:#a6c2c0;--c4:#d0bd99;--c5:#b2aecb}
+.trio.more{margin-top:-6px}
+.jm-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--sunk)}

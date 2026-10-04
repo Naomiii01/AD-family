@@ -470,3 +470,9 @@ alter table public.families add column if not exists guardian text not null defa
 -- families.star_days; tables checkins, penalties, advances (RLS: can_access);
 -- week_progress(member, month), no_spend_today(member), give_penalty, refund_penalty, give_advance, set_star_days;
 -- close_month requires week_progress.ok for the star; plan_month deducts an unpaid advance from the allowance.
+
+-- ---------- 2026-10-04: extra jars (固定支出、預備金、自訂) ----------
+-- Applied as Supabase migrations "allow_extra_jar_keys" and "extra_jar_functions":
+-- ledger.jar accepts any short key; expenses.jar; members.extra_jars [{key,name,target}];
+-- set_extra_jars (parents only), move_money (not out of dream/long), plan_month_v2 (jsonb ratio over all jars,
+-- free takes the remainder), add_expense_v2 (pay from free or any extra jar), balances.extras.

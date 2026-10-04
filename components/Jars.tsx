@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, supabase } from "@/lib/supabase";
-import { JN, fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate, matchOf, stepBonus, gd } from "@/lib/util";
+import { fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate, matchOf, stepBonus, gd, jarList, jarName, spendable } from "@/lib/util";
 import { JarSVG, Stars, Confirm } from "./ui";
 
 export function monthlyPlan(app: App) {
@@ -11,7 +11,7 @@ export function monthlyPlan(app: App) {
   if (cur) return { match: 0, ...cur.alloc };
   const last = [...data.months].reverse()[0];
   const a = split(sel.allowance, last?.ratio || defRatio(sel.role));
-  return { ...a, match: matchOf(app.family, sel.role, a.long) };
+  return { ...a, match: matchOf(app.family, sel.role, a.long) } as Record<string, number>;
 }
 
 export default function Jars({ app }: { app: App }) {
@@ -33,7 +33,7 @@ export default function Jars({ app }: { app: App }) {
     <>
       {!cur && (
         <div className="banner warn">
-          <span>{app.isSelf ? "這個月還沒做月初規劃。" : `${sel.name} 這個月還沒做月初規劃。`}先把零用金分進三個罐子，才能開始記帳。</span>
+          <span>{app.isSelf ? "這個月還沒做月初規劃。" : `${sel.name} 這個月還沒做月初規劃。`}先把零用金分進罐子，才能開始記帳。</span>
           <div><button className="btn sm primary" onClick={() => app.go("month")}>去做規劃</button></div>
         </div>
       )}
@@ -71,9 +71,11 @@ export default function Jars({ app }: { app: App }) {
           <div className="js">只進不出<br />下個目標 {fmt(ms)}</div>
         </div>
       </div>
+      <ExtraJars app={app} />
       <Stars months={data.months} />
       <DreamCard app={app} />
       <LongCard app={app} />
+      <MoveMoney app={app} />
       {data.recent.length > 0 && (
         <section className="card">
           <h3>最近的進出</h3>
@@ -81,7 +83,7 @@ export default function Jars({ app }: { app: App }) {
             {data.recent.map((e) => (
               <div className="li" key={e.id}>
                 <span className="dot" style={{ background: `var(--${e.jar})` }} />
-                <span className="t">{e.note}<br /><span className="d">{JN[e.jar]} · {shortDate(e.created_at)}</span></span>
+                <span className="t">{e.note}<br /><span className="d">{jarName(sel, e.jar)} · {shortDate(e.created_at)}</span></span>
                 <span />
                 <b className="num" style={{ color: e.amount < 0 ? "var(--warn)" : "var(--ink)" }}>{e.amount > 0 ? "+" : ""}{num(e.amount)}</b>
               </div>
@@ -275,5 +277,72 @@ export function GrowthChart({ start, monthly, years }: { start: number; monthly:
       <circle cx={X(years)} cy={Y(plain[years])} r="3" fill="var(--muted)" />
       <text x={X(years) - 6} y={Y(plain[years]) + 14} textAnchor="end">{fmt(plain[years])}</text>
     </svg>
+  );
+}
+
+function ExtraJars({ app }: { app: App }) {
+  const { data, sel } = app;
+  const extras = jarList(sel).filter((j) => !j.core);
+  if (!extras.length) return null;
+  const cur = data.months.find((x) => x.month === curMonth());
+  return (
+    <div className="trio more" style={{ gridTemplateColumns: `repeat(${Math.min(extras.length, 3)}, minmax(0, 1fr))` }}>
+      {extras.map((j) => {
+        const bal = data.bal.extras?.[j.key] || 0;
+        const planned = cur?.alloc?.[j.key] || 0;
+        const pct = j.target ? bal / j.target : planned ? bal / planned : bal > 0 ? 0.5 : 0;
+        const sub = j.key === "fixed" ? (planned ? `本月放 ${fmt(planned)}` : "每月固定要付的錢")
+          : j.target ? `目標 ${fmt(j.target)} · ${Math.min(100, Math.round((bal / j.target) * 100))}%`
+          : j.key === "reserve" ? "突發狀況用" : "";
+        return (
+          <div className="jarcol" key={j.key}>
+            <JarSVG kind={j.key} pct={pct} />
+            <div className="jn" style={{ color: `var(--${j.key})` }}>{j.name}</div>
+            <div className="ja">{fmt(bal)}</div>
+            <div className="js">{sub}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MoveMoney({ app }: { app: App }) {
+  const { data, sel, toast } = app;
+  const [open, setOpen] = useState(false);
+  const froms = spendable(sel);
+  const all = jarList(sel);
+  const [from, setFrom] = useState("free");
+  const [to, setTo] = useState("dream");
+  const [amt, setAmt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const balOf = (k: string) => (k === "free" ? data.bal.free : data.bal.extras?.[k] || 0);
+  async function go() {
+    setBusy(true);
+    const [, e] = await rpc("move_money", { p_member: sel.id, p_from: from, p_to: to, p_amount: Math.round(+amt) });
+    setBusy(false);
+    if (e) return toast(e);
+    toast(`已從${jarName(sel, from)}移 ${fmt(+amt)} 到${jarName(sel, to)}`);
+    setAmt("");
+    setOpen(false);
+    await data.reload();
+  }
+  if (!open)
+    return <button className="btn" onClick={() => setOpen(true)}>移動罐子裡的錢</button>;
+  return (
+    <section className="card">
+      <div className="card-h"><h3>移動罐子裡的錢</h3><button className="btn sm ghost" onClick={() => setOpen(false)}>收起</button></div>
+      <div className="grid2">
+        <label className="f">從<select id="mv-from" value={from} onChange={(e) => { setFrom(e.target.value); if (e.target.value === to) setTo(all.find((j) => j.key !== e.target.value)!.key); }}>
+          {froms.map((j) => <option key={j.key} value={j.key}>{j.name}（{fmt(balOf(j.key))}）</option>)}
+        </select></label>
+        <label className="f">到<select id="mv-to" value={to} onChange={(e) => setTo(e.target.value)}>
+          {all.filter((j) => j.key !== from).map((j) => <option key={j.key} value={j.key}>{j.name}</option>)}
+        </select></label>
+      </div>
+      <label className="f">金額<input id="mv-amt" type="number" inputMode="numeric" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
+      <div><button className="btn primary" disabled={busy || !(+amt > 0)} onClick={go}>移過去</button></div>
+      <p className="note">夢想罐和長期罐的錢只能放進去，不能移出來。</p>
+    </section>
   );
 }

@@ -6,8 +6,9 @@ import Agreement from "./Agreement";
 import Rules from "./Rules";
 import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
+import JarManager from "./JarManager";
 import { SKINS, SkinKey, skinOf } from "@/lib/themes";
-import { gd } from "@/lib/util";
+import { gd, jarList } from "@/lib/util";
 
 export default function More({ app }: { app: App }) {
   const { sub, go, isParent, sel, me, isSelf } = app;
@@ -18,7 +19,8 @@ export default function More({ app }: { app: App }) {
       sub === "quick" ? <QuickSetup app={app} /> :
       sub === "parent" && isParent ? <Parent app={app} /> :
       sub === "pin" ? <MyPin app={app} /> :
-      sub === "skin" ? <SkinPicker app={app} /> : null;
+      sub === "skin" ? <SkinPicker app={app} /> :
+      sub === "jars" ? <JarManager app={app} /> : null;
     return (
       <>
         <button className="back" onClick={() => go("more")}>‹ 更多</button>
@@ -32,6 +34,7 @@ export default function More({ app }: { app: App }) {
     ["rules", "則", "long", "罐子使用原則", "三個罐子怎麼用、家庭銀行和夢想加碼"],
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
+  items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
   items.push(["skin", "色", "accent", "畫面主題" + who, `目前是「${SKINS[skinOf(sel)].name}」`]);
   if (isParent) items.push(["parent", "家", "free", "家長設定", "家人、零用金、密碼、獎勵、家庭銀行規則"]);
   items.push(["pin", "密", "ink", "更改我的登入密碼", `${me.name} 的 4 到 8 位數字密碼`]);

@@ -4,7 +4,7 @@ import { supabase, rpc } from "@/lib/supabase";
 
 export type MemberData = {
   loaded: boolean;
-  bal: { free: number; dream: number; long: number; dream_own?: number; dream_tiers?: number; last_expense: string | null };
+  bal: { free: number; dream: number; long: number; dream_own?: number; dream_tiers?: number; extras?: Record<string, number>; last_expense: string | null };
   months: any[];
   goal: any | null;
   achieved: any[];

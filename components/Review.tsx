@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
-import { JN, fmt, mkLabel, gd } from "@/lib/util";
+import { fmt, mkLabel, gd, jarList, jarName } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
 import { useWeeks, WeekList } from "./Weeks";
@@ -64,7 +64,7 @@ export default function Review({ app }: { app: App }) {
         {stat}
         <section className="card">
           <div className="card-h"><h3>結算完成</h3><span className={`star ${mo.star ? "" : "off"}`} style={{ fontSize: "1.5rem" }}>★</span></div>
-          {mo.moved > 0 && <div className="kv"><span>自由罐結餘轉入{JN[mo.review?.to]}</span><b>{fmt(mo.moved)}</b></div>}
+          {mo.moved > 0 && <div className="kv"><span>自由罐結餘轉入{jarName(sel, mo.review?.to)}</span><b>{fmt(mo.moved)}</b></div>}
           {mo.alloc?.bonus > 0 && <div className="kv"><span>夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(mo.alloc.bonus)}</b></div>}
           {mo.alloc?.weeks_ok === false && <p className="small muted">這個月有幾週記帳不到 {family.star_days} 天，所以沒有拿到星星。</p>}
           {mo.interest > 0 && <div className="kv"><span>長期罐利息</span><b>{fmt(mo.interest)}</b></div>}
@@ -113,6 +113,7 @@ export default function Review({ app }: { app: App }) {
             </div>
           </>
         ) : <p className="small muted">這個月的自由罐剛好用完。</p>}
+        {jarList(sel).some((j) => !j.core) && <p className="note">{jarList(sel).filter((j) => !j.core).map((j) => j.name).join("、")}的餘額會留在罐子裡，帶到下個月。</p>}
         {rate > 0 && <div className="kv"><span>結算後長期罐利息（月息 {rate}%）</span><b>+{fmt((after * rate) / 100)}</b></div>}
         {bonusPreview > 0 && <div className="kv"><span>結算時夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(bonusPreview)}</b></div>}
       </section>

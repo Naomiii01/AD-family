@@ -30,10 +30,19 @@ export function mkLabel(mk: string) {
   const [y, m] = mk.split("-");
   return `${y} 年 ${Number(m)} 月`;
 }
-export function split(total: number, r: { free: number; dream: number; long: number }) {
-  const free = Math.round((total * r.free) / 100);
-  const dream = Math.round((total * r.dream) / 100);
-  return { free, dream, long: Math.max(0, total - free - dream) };
+/** Every jar except free gets floor(total × pct); free takes the remainder (same rule as the database). */
+export function split(total: number, r: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  let others = 0;
+  for (const k of Object.keys(r)) {
+    if (k === "free") continue;
+    out[k] = Math.floor((total * (r[k] || 0)) / 100);
+    others += out[k];
+  }
+  out.free = total - others;
+  if (out.dream === undefined) out.dream = 0;
+  if (out.long === undefined) out.long = 0;
+  return out;
 }
 export function defRatio(role: string) {
   return role === "parent" ? { free: 40, dream: 30, long: 30 } : { free: 50, dream: 30, long: 20 };
@@ -66,3 +75,22 @@ export const stepBonus = (family: any) => Math.round(((family.bonus_step ?? 5000
 
 /** What the kids call the parent who sets the rules (爸爸, 媽媽, 爸媽, 阿嬤...). */
 export const gd = (family: any) => (family?.guardian || "家長");
+
+export const CORE_JARS = ["free", "dream", "long"];
+export const JAR_PRESETS = [
+  { key: "fixed", name: "固定支出", desc: "房租、保險、電話費、學費這類每月固定要付的錢" },
+  { key: "reserve", name: "預備金", desc: "生病、修車、家電壞掉這類突發狀況用；建議存到 3–6 個月的生活費" },
+];
+export type JarDef = { key: string; name: string; core: boolean; target?: number };
+/** The member's jars in display order: the three core jars, then any extra jars. */
+export function jarList(m: any): JarDef[] {
+  return [
+    ...CORE_JARS.map((k) => ({ key: k, name: JN[k], core: true })),
+    ...((m?.extra_jars || []) as any[]).map((j) => ({ key: j.key, name: j.name, core: false, target: j.target || 0 })),
+  ];
+}
+export function jarName(m: any, key: string) {
+  return JN[key] && key !== "keep" ? JN[key] : (m?.extra_jars || []).find((j: any) => j.key === key)?.name || key;
+}
+/** Jars money can be spent from directly (not dream, not long). */
+export const spendable = (m: any) => jarList(m).filter((j) => j.key !== "dream" && j.key !== "long");

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
-import { CATS, JARS, JN, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd } from "@/lib/util";
+import { CATS, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
 
@@ -11,7 +11,7 @@ const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中
 export function useExpenses(memberId: string, mk: string) {
   const [list, setList] = useState<any[]>([]);
   const load = useCallback(async () => {
-    const { data } = await supabase.from("expenses").select("id,item,amount,type,category,source,spent_on,created_at")
+    const { data } = await supabase.from("expenses").select("id,item,amount,type,category,source,spent_on,created_at,jar")
       .eq("member_id", memberId).eq("month", mk).eq("voided", false).order("created_at", { ascending: false });
     setList(data || []);
   }, [memberId, mk]);
@@ -35,7 +35,8 @@ export default function Month({ app }: { app: App }) {
 function Plan({ app }: { app: App }) {
   const { data, sel, mk, toast } = app;
   const last = [...data.months].reverse()[0];
-  const [r, setR] = useState(last?.ratio || defRatio(sel.role));
+  const jars = jarList(sel);
+  const [r, setR] = useState<Record<string, number>>(() => startRatio(sel, last?.ratio));
   const [extra, setExtra] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,7 +56,7 @@ function Plan({ app }: { app: App }) {
   const match = matchOf(app.family, sel.role, a.long);
   const fixLong = () => {
     setR((x) => {
-      const y = { ...x };
+      const y: Record<string, number> = { ...x };
       while (split(total, y).long < minLong && (y.free >= 5 || y.dream >= 5)) {
         if (y.free >= 5) y.free -= 5; else y.dream -= 5;
         y.long += 5;
@@ -64,9 +65,9 @@ function Plan({ app }: { app: App }) {
     });
   };
 
-  const bump = (k: "dream" | "long", d: number) => {
+  const bump = (k: string, d: number) => {
     setR((x) => {
-      const y = { ...x };
+      const y: Record<string, number> = { ...x };
       if (d > 0 && y.free >= 5) { y[k] += 5; y.free -= 5; }
       if (d < 0 && y[k] >= 5) { y[k] -= 5; y.free += 5; }
       return y;
@@ -75,13 +76,12 @@ function Plan({ app }: { app: App }) {
 
   async function confirm() {
     setBusy(true);
-    const [, e] = await rpc("plan_month", {
-      p_member: sel.id, p_month: mk, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note,
-      p_free: r.free, p_dream: r.dream, p_long: r.long,
+    const [, e] = await rpc("plan_month_v2", {
+      p_member: sel.id, p_month: mk, p_extra: Math.max(0, Math.round(+extra)) || 0, p_extra_note: note, p_ratio: r,
     });
     setBusy(false);
     if (e) return toast(e);
-    toast("已放進三個罐子");
+    toast("已放進罐子");
     await data.reload();
   }
 
@@ -90,7 +90,7 @@ function Plan({ app }: { app: App }) {
     const rem = g.price - data.bal.dream;
     const n = a.dream > 0 ? Math.ceil(rem / a.dream) : Infinity;
     const move = Math.min(10, r.free);
-    const more = split(total, { free: r.free - move, dream: r.dream + move, long: r.long }).dream;
+    const more = split(total, { ...r, free: r.free - move, dream: r.dream + move }).dream;
     const n2 = more > 0 ? Math.ceil(rem / more) : Infinity;
     insight = (
       <div className="insight">
@@ -100,22 +100,25 @@ function Plan({ app }: { app: App }) {
     );
   }
 
-  const row = (k: "free" | "dream" | "long") => (
+  const hint = (k: string) =>
+    k === "free" ? "剩下的都在這裡" : k === "dream" ? "為夢想存" : k === "long" ? (sel.role === "kid" ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資")
+      : k === "fixed" ? "房租、保險、電話費" : k === "reserve" ? "突發狀況用" : "";
+  const row = (k: string) => (
     <div className="arow" key={k}>
       <span className="dot" style={{ background: `var(--${k})` }} />
       <div>
-        <div className="nm">{JN[k]}</div>
-        <div className="small muted">{k === "free" ? "剩下的都在這裡" : k === "dream" ? "為夢想存" : sel.role === "kid" ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資"}</div>
+        <div className="nm">{jarName(sel, k)}</div>
+        <div className="small muted">{hint(k)}</div>
       </div>
       <div style={{ display: "grid", justifyItems: "end", gap: 4 }}>
         {k === "free" ? <span className="pct">{r.free}%</span> : (
           <div className="step">
-            <button onClick={() => bump(k, -5)} aria-label={`${JN[k]}減少`} disabled={r[k] < 5}>−</button>
+            <button onClick={() => bump(k, -5)} aria-label={`${jarName(sel, k)}減少`} disabled={r[k] < 5}>−</button>
             <span className="pct">{r[k]}%</span>
-            <button onClick={() => bump(k, 5)} aria-label={`${JN[k]}增加`} disabled={r.free < 5}>+</button>
+            <button onClick={() => bump(k, 5)} aria-label={`${jarName(sel, k)}增加`} disabled={r.free < 5}>+</button>
           </div>
         )}
-        <span className="amt">{fmt(a[k])}</span>
+        <span className="amt">{fmt(a[k] || 0)}</span>
       </div>
     </div>
   );
@@ -133,14 +136,14 @@ function Plan({ app }: { app: App }) {
         <div className="kv"><span className="muted">本月總共</span><b>{fmt(total)}</b></div>
       </section>
       <section className="card">
-        <h3>2. 分配到三個罐子</h3>
-        <div className="alloc">{JARS.map(row)}</div>
-        <div className="row">
+        <h3>2. 分配到{jars.length === 3 ? "三" : ` ${jars.length} `}個罐子</h3>
+        <div className="alloc">{jars.map((j) => row(j.key))}</div>
+        {jars.length === 3 && <div className="row">
           <span className="small muted">快速選：</span>
           <button className="btn sm" onClick={() => setR({ free: 50, dream: 30, long: 20 })}>均衡 5:3:2</button>
           <button className="btn sm" onClick={() => setR({ free: 30, dream: 50, long: 20 })}>衝夢想 3:5:2</button>
           <button className="btn sm" onClick={() => setR({ free: 40, dream: 20, long: 40 })}>長期派 4:2:4</button>
-        </div>
+        </div>}
         {isKid && (
           lowLong ? (
             <div className="banner warn">
@@ -165,7 +168,7 @@ function Plan({ app }: { app: App }) {
         </div>
       )}
       <button className="btn primary big" disabled={busy || total <= 0 || !!openPrev || lowLong} onClick={confirm}>確認本月規劃，放進罐子</button>
-      <p className="note center">確認後錢會放進三個罐子，這個月的比例就不能再改。</p>
+      <p className="note center">確認後錢會放進罐子，這個月的比例就不能再改。</p>
       {sel.allowance === 0 && <p className="note center">零用金目前是 0 元，請家長到「更多 → 家長設定」設定金額。</p>}
     </>
   );
@@ -178,14 +181,19 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const [amt, setAmt] = useState("");
   const [type, setType] = useState<"need" | "want">("want");
   const [cat, setCat] = useState("飲料點心");
+  const [payJar, setPayJar] = useState("free");
   const [busy, setBusy] = useState(false);
   const isCur = mk === curMonth();
   const sp = ex.list.reduce((s, e) => s + e.amount, 0);
-  const pct = mo.free_start ? clamp(sp / mo.free_start, 0, 1) : 0;
+  const spFree = ex.list.filter((e) => (e.jar || "free") === "free").reduce((s, e) => s + e.amount, 0);
+  const pct = mo.free_start ? clamp(spFree / mo.free_start, 0, 1) : 0;
+  const payJars = spendable(sel);
+  const shown = [...jarList(sel).map((j) => j.key).filter((k) => mo.alloc[k] !== undefined),
+    ...Object.keys(mo.alloc).filter((k) => !["match", "advance", "bonus", "weeks_ok"].includes(k) && !jarList(sel).some((j) => j.key === k))];
 
   async function add() {
     setBusy(true);
-    const [, e] = await rpc("add_expense", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat });
+    const [, e] = await rpc("add_expense_v2", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar });
     setBusy(false);
     if (e) return toast(e);
     toast("記下來了");
@@ -196,7 +204,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
   async function del(id: string) {
     const [, e] = await rpc("delete_expense", { p_id: id });
     if (e) return toast(e);
-    toast("已刪除，錢退回自由罐");
+    toast("已刪除，錢退回原本的罐子");
     await Promise.all([ex.reload(), data.reload()]);
   }
 
@@ -204,11 +212,11 @@ function Active({ app, mo }: { app: App; mo: any }) {
     <>
       <section className="card">
         <div className="grid3">
-          {JARS.map((k) => (
+          {shown.map((k) => (
             <div key={k}>
-              <div className="small" style={{ color: `var(--${k})`, fontWeight: 700 }}>{JN[k]}</div>
+              <div className="small" style={{ color: `var(--${k})`, fontWeight: 700 }}>{jarName(sel, k)}</div>
               <div className="num" style={{ fontWeight: 700 }}>{fmt(mo.alloc[k])}</div>
-              <div className="note">{mo.ratio[k]}%</div>
+              <div className="note">{mo.ratio?.[k] ?? 0}%</div>
             </div>
           ))}
         </div>
@@ -222,7 +230,17 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <div className="card-h"><span className="muted">自由罐還有</span><span className="small muted">本月可用 {fmt(mo.free_start)}</span></div>
           <div className="big-n">{fmt(data.bal.free)}</div>
           <div className="bar"><span style={{ width: `${pct * 100}%`, background: pct > 0.85 ? "var(--warn)" : "var(--free)" }} /></div>
+          {payJars.length > 1 && (
+            <div className="row small muted" style={{ gap: 12 }}>
+              {payJars.filter((j) => j.key !== "free").map((j) => <span key={j.key}>{j.name} <b className="num" style={{ color: "var(--ink)" }}>{fmt(data.bal.extras?.[j.key] || 0)}</b></span>)}
+            </div>
+          )}
           <h3 style={{ marginTop: 6 }}>記一筆花費</h3>
+          {payJars.length > 1 && (
+            <div className="seg" role="group" aria-label="從哪個罐子付">
+              {payJars.map((j) => <button key={j.key} className={payJar === j.key ? "on" : ""} onClick={() => setPayJar(j.key)}>{j.name}</button>)}
+            </div>
+          )}
           <div className="grid2">
             <label className="f">買了什麼<input id="e-item" maxLength={40} placeholder="例如：手搖飲" value={item} onChange={(e) => setItem(e.target.value)} /></label>
             <label className="f">多少錢<input id="e-amt" type="number" inputMode="numeric" min={1} placeholder="60" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
@@ -252,7 +270,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             {ex.list.map((e) => (
               <div className="li" key={e.id}>
                 <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span> <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}</span>
+                <span className="t">{e.item} <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span> <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}</span>
                 <b className="num">{num(e.amount)}</b>
                 {mo.status === "active" ? <button className="x" onClick={() => del(e.id)} aria-label={`刪除 ${e.item}`}>×</button> : <span />}
               </div>
@@ -263,4 +281,19 @@ function Active({ app, mo }: { app: App; mo: any }) {
       {mo.status === "active" && <button className="btn big" onClick={() => app.go("review")}>月底了，去做檢討 →</button>}
     </>
   );
+}
+
+/** Starting ratio: last month's split, adjusted for jars added or removed since. */
+function startRatio(sel: any, last?: Record<string, number>): Record<string, number> {
+  const keys = jarList(sel).map((j) => j.key);
+  let base: Record<string, number>;
+  if (last) base = { ...last };
+  else if (sel.role !== "kid" && keys.includes("fixed") && keys.includes("reserve")) base = { free: 20, dream: 10, long: 20, fixed: 40, reserve: 10 };
+  else base = { ...defRatio(sel.role) };
+  const out: Record<string, number> = {};
+  let used = 0;
+  for (const k of keys) { if (k !== "free") { out[k] = Math.max(0, base[k] || 0); used += out[k]; } }
+  if (used > 100) { for (const k of keys) if (k !== "free") out[k] = 0; used = 0; out.dream = 30; out.long = 30; used = 60; }
+  out.free = 100 - used;
+  return out;
 }

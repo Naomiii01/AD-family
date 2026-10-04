@@ -62,6 +62,16 @@ export default function Rules({ app }: { app: App }) {
       </section>
 
       <section className="card">
+        <h3>大人可以再加的罐子</h3>
+        <ul className="plain">
+          <li><b>固定支出</b>：房租、保險、電話費、學費這類每月固定要付的錢，月初先分好，付款時從這個罐子記帳。</li>
+          <li><b>預備金</b>：生病、修車、家電壞掉這類突發狀況用，可以設定存到多少就夠（建議 3–6 個月的生活費）。</li>
+          <li>也可以自己命名，例如旅遊、孝親、進修。在「更多 → 管理罐子」新增或移除。</li>
+          <li>這些罐子的餘額不會在月底轉走，會留到下個月。</li>
+        </ul>
+      </section>
+
+      <section className="card">
         <h3>每個月的節奏</h3>
         <ol className="steps">
           <li><b>月初規劃</b>：確認零用金和額外收入，決定三個罐子的比例。</li>
