@@ -60,7 +60,7 @@ export default function Shell({ userId }: { userId: string }) {
     setMe(m);
     setFamily(f);
     setMembers(list);
-    setSelId((cur) => (list.find((x) => x.id === cur) ? cur : (m.role === "parent" ? list.find((x) => x.role === "kid")?.id : null) || m.id));
+    setSelId((cur) => (list.find((x) => x.id === cur) ? cur : m.id));
   }, [userId]);
 
   useEffect(() => {
