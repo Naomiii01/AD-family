@@ -8,13 +8,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -420,6 +420,16 @@ const F: Record<string, (a: any) => any> = {
     for (const [k, v] of Object.entries(r.split) as [string, number][]) if (bal(r.member_id, k) < v) fail(`${jarNm(r.member_id, k)}的錢已經用掉了，不能刪除這筆收入`);
     r.voided = true;
     for (const [k, v] of Object.entries(r.split) as [string, number][]) log(r.member_id, k, -v, "刪除收入：" + r.source, r.month, "income_void");
+  },
+  set_long_value: ({ p_member, p_value }) => {
+    needAccess(p_member);
+    if (!(p_value >= 0) || p_value > 100000000) fail("請輸入正確的市值");
+    const mk = curMonth();
+    const principal = bal(p_member, "long");
+    const ex = db.long_values.find((x) => x.member_id === p_member && x.month === mk);
+    if (ex) Object.assign(ex, { value: p_value, principal, updated_at: now() });
+    else db.long_values.push({ id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, value: p_value, principal, updated_at: now() });
+    return { value: p_value, principal };
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };

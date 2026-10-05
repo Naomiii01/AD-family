@@ -510,3 +510,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- delete_income(p_id): only in an active month and only if each jar still holds its share; logs 'income_void'.
 -- migration: other_income_stats
 -- _dream_own also subtracts income_void on the dream jar; year_stats adds other_income and income_cats.
+
+-- migration: long_market_value
+-- long_values(member_id, month unique, value, principal = long-jar balance when recorded); RLS read via can_access.
+-- set_long_value(p_member, p_value): self or parent; upserts the current month.

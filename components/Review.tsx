@@ -1,8 +1,9 @@
 "use client";
+import { useLongHistory, RealReturn } from "./LongReal";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
-import { fmt, mkLabel, gd, jarList, jarName } from "@/lib/util";
+import { fmt, mkLabel, gd, jarList, jarName, curMonth } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
 import { useWeeks, WeekList } from "./Weeks";
@@ -117,6 +118,7 @@ export default function Review({ app }: { app: App }) {
         {rate > 0 && <div className="kv"><span>結算後長期罐利息（月息 {rate}%）</span><b>+{fmt((after * rate) / 100)}</b></div>}
         {bonusPreview > 0 && <div className="kv"><span>結算時夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(bonusPreview)}</b></div>}
       </section>
+      {mk === curMonth() && <LongValueCard app={app} />}
       <section className="card">
         <h3>三個問題</h3>
         {([["best", "這個月最滿意的一筆花費？"], ["regret", "有沒有買了有點後悔的？"], ["next", "下個月想怎麼調整？"]] as const).map(([k, q]) => (
@@ -143,5 +145,16 @@ export default function Review({ app }: { app: App }) {
       <Confirm label="完成本月結算" confirmLabel="確定結算" className="btn primary big" disabled={busy} onConfirm={close} />
       <p className="note center">結算後這個月就不能再記帳或修改。建議和{gd(family)}一起完成。</p>
     </>
+  );
+}
+
+function LongValueCard({ app }: { app: App }) {
+  const hist = useLongHistory(app.sel.id);
+  return (
+    <section className="card">
+      <h3>長期罐：記下這個月的市值</h3>
+      <p className="small muted">打開證券 App 看庫存現值填在這裡，「罐子」頁就會算出賺賠和報酬率。</p>
+      <RealReturn app={app} hist={hist} compact />
+    </section>
   );
 }

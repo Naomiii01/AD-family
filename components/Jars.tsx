@@ -1,4 +1,5 @@
 "use client";
+import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, supabase } from "@/lib/supabase";
@@ -193,6 +194,8 @@ function DreamCard({ app }: { app: App }) {
 function LongCard({ app }: { app: App }) {
   const { data, family, sel } = app;
   const [years, setYears] = useState(10);
+  const hist = useLongHistory(sel.id);
+  const [mon, setMon] = useState<number | null>(null);
   const rate = Number(family.rate);
   const plan = monthlyPlan(app);
   const isKid = sel.role === "kid";
@@ -200,12 +203,18 @@ function LongCard({ app }: { app: App }) {
   const exMatch = matchOf(family, "kid", exYou);
   const per = isKid ? exYou + exMatch : plan.long + (plan.match || 0);
   const actual = plan.long + (plan.match || 0);
+  const avg = avgMonthly(hist.months);
+  const base = Math.round((avg || per) / 100) * 100;
+  const monthly = mon ?? base;
+  const monMax = Math.max(5000, Math.ceil((base * 3) / 1000) * 1000);
+  const lastVal = hist.values[hist.values.length - 1];
+  const startVal = lastVal && lastVal.month === curMonth() ? lastVal.value : data.bal.long;
   return (
     <section className="card">
       <div className="card-h"><h2>長期罐：定期投資</h2>{rate > 0 && <span className="pill active">家庭銀行月息 {rate}%</span>}</div>
       {sel.role === "kid" ? (
         <>
-          <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期定額買股票，只進不出。</p>
+          <p className="small">每月至少放 <b>{fmt(family.long_min)}</b>，你放多少，{gd(family)}就配對 {family.match_pct}%{family.match_cap > 0 ? `（每月最多 ${fmt(family.match_cap)}）` : ""}。這筆錢每月定期投資股票，只進不出。</p>
           <div className="grid3 center">
             <div><div className="note">你放</div><b className="num">{fmt(exYou)}</b></div>
             <div><div className="note">{gd(family)}配對</div><b className="num" style={{ color: "var(--long)" }}>+{fmt(exMatch)}</b></div>
@@ -214,14 +223,22 @@ function LongCard({ app }: { app: App }) {
           {actual !== per && <p className="note">這個月實際是：你放 {fmt(plan.long)}，{gd(family)}配對 {fmt(plan.match || 0)}，一共投資 {fmt(actual)}。</p>}
         </>
       ) : (
-        <p className="small">長期罐的錢只進不出，每月定期投資。</p>
+        <p className="small">長期罐的錢只進不出，每月定期投資。每月金額可以不一樣（定期不定額）。</p>
       )}
+      <h3 style={{ marginTop: 8 }}>每月實際投入</h3>
+      <ContribBars months={hist.months} family={family} />
+      {hist.months.length > 0 && <p className="note">近 {Math.min(6, hist.months.length)} 個月平均每月投入 {fmt(avgMonthly(hist.months))}。</p>}
+      <h3 style={{ marginTop: 8 }}>真實報酬</h3>
+      <RealReturn app={app} hist={hist} />
+      <h3 style={{ marginTop: 8 }}>未來試算</h3>
       {rate > 0 && <p className="note">月底結算時，家庭銀行另外依長期罐金額發 {rate}% 利息，這個月大約 {fmt((data.bal.long * rate) / 100)}。</p>}
-      <div className="kv small"><span className="muted">每月投資 {fmt(per)}，持續</span><b>{years} 年</b></div>
+      <div className="kv small"><span className="muted">如果每月平均投入</span><b className="num">{fmt(monthly)}</b></div>
+      <input id="mon" type="range" min={0} max={monMax} step={100} value={monthly} onChange={(e) => setMon(+e.target.value)} aria-label="每月平均投入" />
+      <div className="kv small"><span className="muted">持續</span><b>{years} 年</b></div>
       <input id="yrs" type="range" min={3} max={30} step={1} value={years} onChange={(e) => setYears(+e.target.value)} aria-label="年數" />
-      <GrowthChart start={data.bal.long} monthly={per} years={years} />
+      <GrowthChart start={startVal} monthly={monthly} years={years} />
       <div className="legend"><span><i style={{ background: "var(--long)" }} />投資，年報酬 6%</span><span><i style={{ background: "var(--muted)" }} />只存不投資</span></div>
-      <p className="note">圖表用長期投資常見的年報酬 6% 示意複利。真實股票有漲有跌，不保證報酬。</p>
+      <p className="note">預設用近幾個月的平均投入，可以拉動試算。圖表用長期投資常見的年報酬 6% 示意複利，真實股票有漲有跌，不保證報酬。</p>
     </section>
   );
 }
