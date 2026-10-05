@@ -108,6 +108,8 @@ export default function Year({ app }: { app: App }) {
             <div><div className="small muted">長期罐今年增加</div><b className="num">{fmt(longNet)}</b></div>
             <div><div className="small muted">其中利息</div><b className="num">{fmt(stats.interest)}</b></div>
             <div><div className="small muted">今年花掉</div><b className="num">{fmt(stats.spent)}</b></div>
+            <div><div className="small muted">今年其他收入</div><b className="num" style={{ color: "var(--long)" }}>{fmt(stats.other_income || 0)}</b></div>
+            <div><div className="small muted">收入來源</div><b className="small">{Object.entries(stats.income_cats || {}).sort((a: any, b: any) => b[1] - a[1]).slice(0, 2).map(([k]) => k).join("、") || "—"}</b></div>
             <div><div className="small muted">想要 / 需要</div><b className="num">{stats.spent ? Math.round((stats.want / stats.spent) * 100) : 0}% / {stats.spent ? Math.round((stats.need / stats.spent) * 100) : 0}%</b></div>
           </div>
         )}

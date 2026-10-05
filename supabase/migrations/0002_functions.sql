@@ -503,3 +503,10 @@ alter table public.families add column if not exists guardian text not null defa
 
 -- migration: pay_method_transfer
 -- expenses.pay_method also allows 'transfer' (轉帳／扣款); _norm_pay accepts transfer/轉帳/扣款/自動扣款.
+
+-- migration: other_income
+-- incomes(id, family_id, member_id, month, source, category, amount, split jsonb {jar: amount}, voided, created_at); RLS read via can_access.
+-- add_income(p_member, p_source, p_category, p_amount, p_split): self or parent; split must sum to amount; logs ledger kind 'income' per jar.
+-- delete_income(p_id): only in an active month and only if each jar still holds its share; logs 'income_void'.
+-- migration: other_income_stats
+-- _dream_own also subtracts income_void on the dream jar; year_stats adds other_income and income_cats.

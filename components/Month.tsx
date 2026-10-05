@@ -5,6 +5,7 @@ import { supabase, rpc } from "@/lib/supabase";
 import { catsFor, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
+import { IncomeCard } from "./Income";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
@@ -138,6 +139,7 @@ function Plan({ app }: { app: App }) {
           <label className="f">{isAdult ? "其他收入" : "額外收入"}<input id="p-ext" type="number" inputMode="numeric" min={0} placeholder="0" value={extra} onChange={(e) => setExtra(e.target.value)} /></label>
           <label className="f">來源<input id="p-note" maxLength={40} placeholder={isAdult ? "獎金、兼職、利息" : "紅包、打工、獎學金"} value={note} onChange={(e) => setNote(e.target.value)} /></label>
         </div>
+        <p className="note">這裡填月初就知道的收入。月中才拿到的（{isAdult ? "兼職、業外、獎金" : "獎學金、比賽獎金、打工"}），之後在「本月 → 其他收入」隨時記。</p>
         <div className="kv"><span className="muted">本月總共</span><b>{fmt(total)}</b></div>
       </section>
       <section className="card">
@@ -286,6 +288,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
         </section>
       )}
+      <IncomeCard app={app} mo={mo} canAdd={mo.status === "active" && isCur} onChange={() => {}} />
       {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}
       {mo.status === "active" && !isCur && (
         <div className="banner warn">

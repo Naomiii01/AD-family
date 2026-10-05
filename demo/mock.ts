@@ -8,18 +8,18 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...blank(), ...JSON.parse(raw) };
   } catch {}
   return fresh();
 }
@@ -382,10 +382,44 @@ const F: Record<string, (a: any) => any> = {
     const L = db.ledger.filter((l) => l.member_id === p_member && l.month.startsWith(y));
     const E = db.expenses.filter((e) => e.member_id === p_member && !e.voided && e.month.startsWith(y));
     const sum = (a: Row[]) => a.reduce((s, x) => s + x.amount, 0);
+    const I = db.incomes.filter((e) => e.member_id === p_member && !e.voided && e.month.startsWith(y));
+    const icats: Row = {};
+    I.forEach((e) => (icats[e.category] = (icats[e.category] || 0) + e.amount));
     const cats: Row = {};
     E.forEach((e) => (cats[e.category] = (cats[e.category] || 0) + e.amount));
     return { long_net: sum(L.filter((l) => l.jar === "long")), dream_net: sum(L.filter((l) => l.jar === "dream")), interest: sum(L.filter((l) => l.kind === "interest")),
-      spent: sum(E), need: sum(E.filter((e) => e.type === "need")), want: sum(E.filter((e) => e.type === "want")), cats };
+      spent: sum(E), need: sum(E.filter((e) => e.type === "need")), want: sum(E.filter((e) => e.type === "want")), cats,
+      other_income: sum(I), income_cats: icats };
+  },
+  add_income: ({ p_member, p_source, p_category, p_amount, p_split }) => {
+    needAccess(p_member);
+    const src = String(p_source || "").trim().slice(0, 40);
+    if (!(p_amount > 0)) fail("請輸入正確的金額");
+    if (!src) fail("請寫下收入來源");
+    let sum = 0;
+    for (const [k, v] of Object.entries(p_split || {}) as [string, number][]) {
+      if (!jarKeys(p_member).includes(k)) fail("沒有這個罐子");
+      if (v < 0) fail("金額不正確");
+      sum += v;
+    }
+    if (sum !== p_amount) fail(`分到各罐的金額加起來要等於 ${p_amount} 元`);
+    const mk = curMonth();
+    const m = db.months.find((x) => x.member_id === p_member && x.month === mk);
+    if (!m) fail("這個月還沒做月初規劃，先到「本月」完成規劃");
+    if (m.status === "closed") fail("這個月已經結算了");
+    const split = Object.fromEntries(Object.entries(p_split).filter(([, v]) => (v as number) > 0));
+    const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, source: src, category: p_category || "其他", amount: p_amount, split, voided: false, created_at: now() };
+    db.incomes.push(row);
+    for (const [k, v] of Object.entries(split)) log(p_member, k, v as number, "收入：" + src, mk, "income");
+    return { id: row.id };
+  },
+  delete_income: ({ p_id }) => {
+    const r = db.incomes.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆收入");
+    needAccess(r.member_id);
+    if (!db.months.some((m) => m.member_id === r.member_id && m.month === r.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    for (const [k, v] of Object.entries(r.split) as [string, number][]) if (bal(r.member_id, k) < v) fail(`${jarNm(r.member_id, k)}的錢已經用掉了，不能刪除這筆收入`);
+    r.voided = true;
+    for (const [k, v] of Object.entries(r.split) as [string, number][]) log(r.member_id, k, -v, "刪除收入：" + r.source, r.month, "income_void");
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
@@ -415,7 +449,7 @@ function weekProgress(mid: string, mk: string) {
 const famOf = (mid: string) => db.families.find((f) => f.id === mem(mid).family_id);
 function dreamOwn(mid: string) {
   const reset = mem(mid).dream_reset_at || "2000-01-01";
-  return db.ledger.filter((l) => l.member_id === mid && l.jar === "dream" && l.amount > 0 && l.kind !== "bonus" && l.created_at > reset).reduce((s, l) => s + l.amount, 0);
+  return db.ledger.filter((l) => l.member_id === mid && l.jar === "dream" && ((l.amount > 0 && l.kind !== "bonus") || l.kind === "income_void") && l.created_at > reset).reduce((s, l) => s + l.amount, 0);
 }
 function activeGoal(mid: string) {
   return db.goals.find((g) => g.member_id === mid && g.status === "active");

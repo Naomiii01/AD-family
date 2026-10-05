@@ -11,6 +11,10 @@ export const PAY_PRESETS: Record<string, string[]> = {
 };
 export const payLabel = (e: any) => (e?.pay_method ? e.pay_detail || PAY_NAME[e.pay_method] || "" : "");
 export const CATS = ["飲料點心", "正餐", "交通", "文具學習", "娛樂", "衣物", "禮物", "其他"];
+export const INCOME_CATS: Record<"kid" | "adult", string[]> = {
+  kid: ["獎學金", "比賽獎金", "兼職打工", "紅包禮金", "其他"],
+  adult: ["兼職", "業外收入", "獎金", "投資收益", "紅包禮金", "其他"],
+};
 export const FIXED_CATS = ["卡費", "貸款", "房租", "水電瓦斯網路費", "保險費", "電話費", "其他"];
 /** Category chips depend on which jar pays: the 固定支出 jar has its own bill categories. */
 export const catsFor = (jar: string) => (jar === "fixed" ? FIXED_CATS : CATS);
