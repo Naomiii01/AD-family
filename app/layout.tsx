@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "全家一起學習零用金規劃：自由罐、夢想罐、長期罐。",
   applicationName: "My零用錢",
   appleWebApp: { capable: true, title: "My零用錢", statusBarStyle: "default" },
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: "/icon-192-v2.png", apple: "/apple-touch-icon-v2.png" },
 };
 
 export const viewport: Viewport = {
