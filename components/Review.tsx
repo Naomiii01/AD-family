@@ -2,7 +2,8 @@
 import { useLongHistory, RealReturn } from "./LongReal";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
-import { rpc } from "@/lib/supabase";
+import { rpc, supabase } from "@/lib/supabase";
+import { Overdraft } from "./Jars";
 import { fmt, mkLabel, gd, jarList, jarName, curMonth } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
@@ -69,6 +70,8 @@ export default function Review({ app }: { app: App }) {
           {mo.alloc?.bonus > 0 && <div className="kv"><span>夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(mo.alloc.bonus)}</b></div>}
           {mo.alloc?.weeks_ok === false && <p className="small muted">這個月有幾週記帳不到 {family.star_days} 天，所以沒有拿到星星。</p>}
           {mo.interest > 0 && <div className="kv"><span>長期罐利息</span><b>{fmt(mo.interest)}</b></div>}
+          {mo.alloc?.overdraft > 0 && <div className="kv"><span>透支，下個月零用金扣回</span><b style={{ color: "var(--warn)" }}>{fmt(mo.alloc.overdraft)}</b></div>}
+          <BorrowStat app={app} />
           {mo.review?.best && <p><span className="muted small">最滿意的花費</span><br />{mo.review.best}</p>}
           {mo.review?.regret && <p><span className="muted small">有點後悔的花費</span><br />{mo.review.regret}</p>}
           {mo.review?.next && <p><span className="muted small">下個月想調整</span><br />{mo.review.next}</p>}
@@ -78,8 +81,8 @@ export default function Review({ app }: { app: App }) {
 
   const left = data.bal.free;
   const rate = Number(family.rate);
-  const after = data.bal.long + (rv.to === "long" ? left : 0);
-  const ownAfter = (data.bal.dream_own || 0) + (rv.to === "dream" ? left : 0);
+  const after = data.bal.long + (rv.to === "long" ? Math.max(0, left) : 0);
+  const ownAfter = (data.bal.dream_own || 0) + (rv.to === "dream" ? Math.max(0, left) : 0);
   const bonusPreview = sel.role === "kid" && family.bonus_pct > 0
     ? Math.max(0, Math.floor(ownAfter / family.bonus_step) - (data.bal.dream_tiers || 0)) * Math.round((family.bonus_step * family.bonus_pct) / 100) : 0;
 
@@ -103,8 +106,14 @@ export default function Review({ app }: { app: App }) {
       <MonthNav mk={mk} setMk={setMk} />
       {stat}
       <section className="card">
-        <h3>自由罐還剩 <span className="num">{fmt(left)}</span></h3>
-        {left > 0 ? (
+        {left < 0
+          ? <h3 style={{ color: "var(--warn)" }}>自由罐透支 <span className="num">{fmt(-left)}</span></h3>
+          : <h3>自由罐還剩 <span className="num">{fmt(left)}</span></h3>}
+        {left < 0 ? (
+          <p className="small">{sel.role === "kid"
+            ? `結算時，透支的 ${fmt(-left)} 會從下個月的零用金扣回。想先補平，可以請${gd(family)}從夢想罐幫你移過來。`
+            : "結算前要先從其他罐子補平。"}</p>
+        ) : left > 0 ? (
           <>
             <p className="small muted">剩下的錢要怎麼處理？</p>
             <div className="seg" role="group" aria-label="結餘去向">
@@ -118,6 +127,8 @@ export default function Review({ app }: { app: App }) {
         {rate > 0 && <div className="kv"><span>結算後長期罐利息（月息 {rate}%）</span><b>+{fmt((after * rate) / 100)}</b></div>}
         {bonusPreview > 0 && <div className="kv"><span>結算時夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(bonusPreview)}</b></div>}
       </section>
+      {left < 0 && <Overdraft app={app} />}
+      <section className="card"><BorrowStat app={app} always /></section>
       {mk === curMonth() && <LongValueCard app={app} />}
       <section className="card">
         <h3>三個問題</h3>
@@ -156,5 +167,28 @@ function LongValueCard({ app }: { app: App }) {
       <p className="small muted">打開證券 App 看庫存現值填在這裡，「罐子」頁就會算出賺賠和報酬率。</p>
       <RealReturn app={app} hist={hist} compact />
     </section>
+  );
+}
+
+/** How often money was pulled into the free jar from other jars this month (挪用). */
+function BorrowStat({ app, always }: { app: App; always?: boolean }) {
+  const { sel, mk } = app;
+  const [st, setSt] = useState<{ n: number; sum: number; dream: number } | null>(null);
+  useEffect(() => {
+    supabase.from("ledger").select("jar,amount,kind,note").eq("member_id", sel.id).eq("month", mk).eq("kind", "move")
+      .then(({ data }: any) => {
+        const rows = (data || []) as any[];
+        const into = rows.filter((r) => r.jar === "free" && r.amount > 0);
+        const dream = rows.filter((r) => r.jar === "dream" && r.amount < 0).reduce((s, r) => s - r.amount, 0);
+        setSt({ n: into.length, sum: into.reduce((s, r) => s + r.amount, 0), dream });
+      });
+  }, [sel.id, mk, app.data.bal.free]);
+  if (!st) return null;
+  if (!st.n && !st.dream) return always ? <p className="small muted" style={{ margin: 0 }}>這個月沒有從其他罐子挪錢到自由罐 👍</p> : null;
+  return (
+    <div className="kv small">
+      <span>本月挪用到自由罐 {st.n} 次{st.dream > 0 ? `（其中從夢想罐 ${fmt(st.dream)}）` : ""}</span>
+      <b style={{ color: "var(--warn)" }}>{fmt(st.sum)}</b>
+    </div>
   );
 }

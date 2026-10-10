@@ -24,10 +24,10 @@ export default function Jars({ app }: { app: App }) {
   const ms = Math.max(10000, Math.ceil((b.long + 1) / 10000) * 10000);
   const idle = daysSince(b.last_expense);
   const showNudge = cur?.status === "active" && (idle === null ? true : idle >= 2);
-  const [adv, setAdv] = useState<any>(null);
+  const [advs, setAdvs] = useState<any[]>([]);
   useEffect(() => {
-    supabase.from("advances").select("amount,repay_month,repaid").eq("member_id", sel.id).eq("repaid", false)
-      .then(({ data: rows }: any) => setAdv((rows || [])[0] || null));
+    supabase.from("advances").select("amount,repay_month,repaid,kind").eq("member_id", sel.id).eq("repaid", false)
+      .then(({ data: rows }: any) => setAdvs(rows || []));
   }, [sel.id, b.free]);
 
   return (
@@ -44,14 +44,12 @@ export default function Jars({ app }: { app: App }) {
           <div><button className="btn sm primary" onClick={() => app.go("month")}>去記帳</button></div>
         </div>
       )}
-      {adv && (
-        <div className="banner">
-          <span>預支了 {fmt(adv.amount)}，{+adv.repay_month.slice(5)} 月的零用金會先扣回這筆錢。</span>
+      {advs.map((a, i) => (
+        <div className="banner" key={i}>
+          <span>{a.kind === "overdraft" ? `上個月透支 ${fmt(a.amount)}` : `預支了 ${fmt(a.amount)}`}，{+a.repay_month.slice(5)} 月的零用金會先扣回這筆錢。</span>
         </div>
-      )}
-      {b.free < 0 && (
-        <div className="banner warn"><span>自由罐目前是 {fmt(b.free)}（被扣款後不夠扣）。下個月放零用金時會先補回來。</span></div>
-      )}
+      ))}
+      <Overdraft app={app} />
       <div className="trio">
         <div className="jarcol">
           <JarSVG kind="free" pct={freeP} />
@@ -326,16 +324,66 @@ function ExtraJars({ app }: { app: App }) {
   );
 }
 
+/** Jars money can be moved out of: never the long jar; the dream jar for adults, or for a kid only when a parent does it. */
+export function movableFrom(app: App) {
+  const { sel, isSelf, isParent } = app;
+  const list = spendable(sel);
+  const dreamOk = sel.role !== "kid" || (isParent && !isSelf);
+  const dream = jarList(sel).find((j) => j.key === "dream");
+  return dreamOk && dream ? [...list, dream] : list;
+}
+export const balOfJar = (app: App, k: string): number =>
+  k === "free" ? app.data.bal.free : k === "dream" ? app.data.bal.dream : k === "long" ? app.data.bal.long : app.data.bal.extras?.[k] || 0;
+
+/** Shown when a jar is overdrawn: one tap covers it from another jar. */
+export function Overdraft({ app }: { app: App }) {
+  const { sel, toast, data, family, isSelf } = app;
+  const [busy, setBusy] = useState(false);
+  const neg = spendable(sel).map((j) => ({ ...j, b: balOfJar(app, j.key) })).filter((j) => j.b < 0);
+  if (!neg.length) return null;
+  const isKid = sel.role === "kid";
+  async function cover(to: string, from: string, amount: number) {
+    setBusy(true);
+    const [, e] = await rpc("move_money", { p_member: sel.id, p_from: from, p_to: to, p_amount: amount });
+    setBusy(false);
+    if (e) return toast(e);
+    toast(`已從${jarName(sel, from)}補 ${fmt(amount)} 到${jarName(sel, to)}`);
+    await data.reload();
+  }
+  return (
+    <div className="banner warn">
+      {neg.map((j) => {
+        const need = -j.b;
+        const srcs = movableFrom(app).filter((s) => s.key !== j.key).map((s) => ({ ...s, b: balOfJar(app, s.key) })).filter((s) => s.b > 0);
+        return (
+          <div key={j.key} style={{ display: "grid", gap: 8 }}>
+            <span><b>{j.name}透支 {fmt(need)}</b>。{isKid ? (isSelf ? `可以請${gd(family)}從夢想罐幫你補；沒補的話，月底結算時會從下個月零用金扣回。` : `可以從${sel.name}的夢想罐幫他補（夢想加碼關卡會從 0 開始）；沒補的話，月底結算時從下個月零用金扣回。`) : "從其他罐子補回來，月底才能結算。"}</span>
+            {srcs.length > 0 && (
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                {srcs.map((s) => {
+                  const amt = Math.min(need, s.b);
+                  return <button key={s.key} className="btn sm" disabled={busy} onClick={() => cover(j.key, s.key, amt)}>從{s.name}補 {fmt(amt)}</button>;
+                })}
+              </div>
+            )}
+            {isKid && isSelf && <span className="note">夢想罐的錢移出來要{gd(family)}同意，而且夢想加碼的關卡會從 0 開始。</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MoveMoney({ app }: { app: App }) {
   const { data, sel, toast } = app;
   const [open, setOpen] = useState(false);
-  const froms = spendable(sel);
+  const froms = movableFrom(app);
   const all = jarList(sel);
   const [from, setFrom] = useState("free");
   const [to, setTo] = useState("dream");
   const [amt, setAmt] = useState("");
   const [busy, setBusy] = useState(false);
-  const balOf = (k: string) => (k === "free" ? data.bal.free : data.bal.extras?.[k] || 0);
+  const balOf = (k: string) => balOfJar(app, k);
   async function go() {
     setBusy(true);
     const [, e] = await rpc("move_money", { p_member: sel.id, p_from: from, p_to: to, p_amount: Math.round(+amt) });
@@ -361,7 +409,9 @@ function MoveMoney({ app }: { app: App }) {
       </div>
       <label className="f">金額<input id="mv-amt" type="number" inputMode="numeric" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
       <div><button className="btn primary" disabled={busy || !(+amt > 0)} onClick={go}>移過去</button></div>
-      <p className="note">夢想罐和長期罐的錢只能放進去，不能移出來。</p>
+      <p className="note">{sel.role === "kid"
+        ? `長期罐的錢只進不出。夢想罐的錢要移出來需要${gd(app.family)}同意（由${gd(app.family)}操作），移出後夢想加碼關卡從 0 開始。`
+        : "長期罐的錢只進不出。從夢想罐移出的錢會記成「挪用」，月底檢討看得到。"}</p>
     </section>
   );
 }

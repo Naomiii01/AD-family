@@ -71,8 +71,9 @@ const F: Record<string, (a: any) => any> = {
     if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
     const me = mem(p_member), fam = famOf(p_member);
     let inc = me.role === "parent" && p_income != null ? Math.max(0, Math.round(p_income)) : me.allowance;
-    const adv = db.advances.find((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
-    if (adv) { inc = Math.max(0, inc - adv.amount); adv.repaid = true; }
+    const due = db.advances.filter((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
+    const adv = due.length ? { amount: due.reduce((s, x) => s + x.amount, 0) } : null;
+    if (adv) { inc = Math.max(0, inc - adv.amount); due.forEach((x) => (x.repaid = true)); }
     const total = inc + (p_extra || 0);
     const a: Row = {};
     let others = 0;
@@ -109,8 +110,9 @@ const F: Record<string, (a: any) => any> = {
     const open = db.months.filter((m) => m.member_id === p_member && m.status === "active" && m.month < p_month).sort((a, b) => (a.month < b.month ? -1 : 1))[0];
     if (open) fail(`${open.month.slice(0, 4)} 年 ${+open.month.slice(5)} 月還沒結算，請先完成上個月的檢討`);
     let inc = mem(p_member).role === "parent" && p_income != null ? Math.max(0, Math.round(p_income)) : mem(p_member).allowance;
-    const adv = db.advances.find((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
-    if (adv) { inc = Math.max(0, inc - adv.amount); adv.repaid = true; }
+    const due = db.advances.filter((x) => x.member_id === p_member && !x.repaid && x.repay_month <= p_month);
+    const adv = due.length ? { amount: due.reduce((s, x) => s + x.amount, 0) } : null;
+    if (adv) { inc = Math.max(0, inc - adv.amount); due.forEach((x) => (x.repaid = true)); }
     const total = inc + (p_extra || 0);
     const a: Row = {};
     let others = 0;
@@ -150,11 +152,14 @@ const F: Record<string, (a: any) => any> = {
     needAccess(p_member);
     const keys = jarKeys(p_member);
     if (!keys.includes(p_from) || !keys.includes(p_to) || p_from === p_to) fail("請選兩個不同的罐子");
-    if (p_from === "dream" || p_from === "long") fail("夢想罐和長期罐的錢不能移出");
+    const mm = mem(p_member);
+    if (p_from === "long") fail("長期罐的錢只進不出");
+    if (p_from === "dream" && mm.role === "kid" && mm.user_id === db.uid) fail(`夢想罐的錢要移出來，需要${famOf(p_member).guardian}同意，請${famOf(p_member).guardian}幫你操作`);
     if (!(p_amount > 0)) fail("請輸入金額");
-    if (p_amount > bal(p_member, p_from)) fail(`「${jarNm(p_member, p_from)}」只有 ${bal(p_member, p_from)} 元`);
+    if (p_amount > bal(p_member, p_from)) fail(`「${jarNm(p_member, p_from)}」只有 ${Math.max(0, bal(p_member, p_from))} 元`);
     log(p_member, p_from, -p_amount, "移到" + jarNm(p_member, p_to), curMonth(), "move");
     log(p_member, p_to, p_amount, "從" + jarNm(p_member, p_from) + "移入", curMonth(), "move");
+    if (p_from === "dream" && mm.role === "kid") { mm.dream_tiers = 0; mm.dream_reset_at = now(); }
   },
   add_expense_v2: (a) => { needAccess(a.p_member); return addExpense(a, "app"); },
   add_expense_v3: (a) => {
@@ -188,6 +193,20 @@ const F: Record<string, (a: any) => any> = {
   close_month: ({ p_member, p_month }) => {
     needAccess(p_member);
     const m = db.months.find((x) => x.member_id === p_member && x.month === p_month && x.status === "active") || fail("這個月不能結算");
+    let od = 0;
+    for (const k of jarKeys(p_member)) {
+      if (k === "dream" || k === "long") continue;
+      const b = bal(p_member, k);
+      if (b >= 0) continue;
+      if (mem(p_member).role !== "kid") fail(`「${jarNm(p_member, k)}」透支 ${-b} 元，請先從其他罐子補平再結算`);
+      od += -b;
+      log(p_member, k, -b, `透支 ${(-b).toLocaleString("en-US")} 元，下個月零用金扣回`, p_month, "overdraft");
+    }
+    if (od > 0) {
+      const d = new Date(+p_month.slice(0, 4), +p_month.slice(5), 1);
+      const nm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      db.advances.push({ id: id(), family_id: mem(p_member).family_id, member_id: p_member, amount: od, quarter: "OD-" + p_month, repay_month: nm, repaid: false, kind: "overdraft", created_at: now() });
+    }
     const to = m.review?.to || "keep";
     let left = bal(p_member, "free");
     if (left > 0 && (to === "dream" || to === "long")) { log(p_member, "free", -left, "月底轉存", p_month, "move"); log(p_member, to, left, "自由罐結餘轉入", p_month, "move"); } else left = 0;
@@ -207,8 +226,8 @@ const F: Record<string, (a: any) => any> = {
     const r = m.review || {};
     const weeksOk = weekProgress(p_member, p_month).ok;
     const star = weeksOk && !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
-    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus, weeks_ok: weeksOk } });
-    return { star, interest: it, moved: left, bonus, weeks_ok: weeksOk };
+    Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus, weeks_ok: weeksOk, overdraft: od } });
+    return { star, interest: it, moved: left, bonus, weeks_ok: weeksOk, overdraft: od };
   },
   set_goal: ({ p_member, p_name, p_price }) => {
     needAccess(p_member);
@@ -285,10 +304,10 @@ const F: Record<string, (a: any) => any> = {
     if (!(p_amount > 0)) fail("請輸入正確的金額");
     if (p_amount > m.allowance) fail(`預支不能超過一個月的零用金（${m.allowance} 元）`);
     const t = todayTW(); const q = `${t.slice(0, 4)}-Q${Math.ceil(+t.slice(5, 7) / 3)}`;
-    if (db.advances.some((x) => x.member_id === p_member && x.quarter === q)) fail("這一季已經預支過了");
-    if (db.advances.some((x) => x.member_id === p_member && !x.repaid)) fail("上一次預支還沒扣回");
+    if (db.advances.some((x) => x.member_id === p_member && x.quarter === q && (x.kind || "advance") === "advance")) fail("這一季已經預支過了");
+    if (db.advances.some((x) => x.member_id === p_member && !x.repaid && (x.kind || "advance") === "advance")) fail("上一次預支還沒扣回");
     const nm = shiftMonth(curMonth(), 1);
-    db.advances.push({ id: id(), family_id: m.family_id, member_id: p_member, amount: p_amount, quarter: q, repay_month: nm, repaid: false, created_at: now() });
+    db.advances.push({ id: id(), family_id: m.family_id, member_id: p_member, amount: p_amount, quarter: q, repay_month: nm, repaid: false, kind: "advance", created_at: now() });
     log(p_member, "free", p_amount, `預支零用金（${+nm.slice(5)} 月扣回）`, curMonth(), "advance");
   },
   set_star_days: ({ p_days }) => {
@@ -484,12 +503,11 @@ function addExpense({ p_member, p_item, p_amount, p_type, p_category, p_jar }: a
   if (!m) fail("這個月還沒做月初規劃，先到「本月」把零用金放進罐子");
   if (m.status === "closed") fail("這個月已經結算了");
   const free = bal(p_member, jar);
-  if (p_amount > free) fail(`${jarNm(p_member, jar)}只剩 ${free} 元，這筆錢不夠付`);
   const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type,
     category: p_category || "其他", source, jar, pay_method: "", pay_detail: "", voided: false, spent_on: at ? at.slice(0, 10) : todayTW(), created_at: at || now() };
   db.expenses.push(row);
   log(p_member, jar, -p_amount, row.item, mk, "expense", at);
-  return { id: row.id, left: free - p_amount, jar };
+  return { id: row.id, left: free - p_amount, jar, jar_name: jarNm(p_member, jar) };
 }
 
 // ---------- table reads with the same visibility rules as RLS ----------

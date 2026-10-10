@@ -6,6 +6,7 @@ import { catsFor, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel,
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
 import { IncomeCard } from "./Income";
+import { Overdraft } from "./Jars";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
@@ -207,11 +208,11 @@ function Active({ app, mo }: { app: App; mo: any }) {
 
   async function add() {
     setBusy(true);
-    const [, e] = await rpc("add_expense_v3", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar, p_pay_method: pay.m, p_pay_detail: pay.d });
+    const [r, e] = await rpc<any>("add_expense_v3", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar, p_pay_method: pay.m, p_pay_detail: pay.d });
     setBusy(false);
     if (e) return toast(e);
     rememberPay(sel.id, pay);
-    toast("記下來了");
+    toast(r && r.left < 0 ? `記下來了。${r.jar_name || "罐子"}透支 ${fmt(-r.left)}，記得補回來` : "記下來了");
     setItem("");
     setAmt("");
     await Promise.all([ex.reload(), data.reload()]);
@@ -251,15 +252,16 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           ))}
         </div>
-        {mo.alloc.advance > 0 && <p className="note">這個月零用金已先扣回預支 {fmt(mo.alloc.advance)}。</p>}
+        {mo.alloc.advance > 0 && <p className="note">這個月零用金已先扣回預支／透支 {fmt(mo.alloc.advance)}。</p>}
         {mo.alloc.match > 0 && <p className="small">{gd(app.family)}配對投資 <b style={{ color: "var(--long)" }}>+{fmt(mo.alloc.match)}</b>，這個月長期罐一共投資 {fmt(mo.alloc.long + mo.alloc.match)}。</p>}
         {mo.extra > 0 && <p className="note">含額外收入 {fmt(mo.extra)}{mo.extra_note ? `（${mo.extra_note}）` : ""}</p>}
       </section>
 
+      {mo.status === "active" && isCur && <Overdraft app={app} />}
       {mo.status === "active" && isCur && (
         <section className="card">
           <div className="card-h"><span className="muted">自由罐還有</span><span className="small muted">本月可用 {fmt(mo.free_start)}</span></div>
-          <div className="big-n">{fmt(data.bal.free)}</div>
+          <div className="big-n" style={data.bal.free < 0 ? { color: "var(--warn)" } : undefined}>{data.bal.free < 0 ? `透支 ${fmt(-data.bal.free)}` : fmt(data.bal.free)}</div>
           <div className="bar"><span style={{ width: `${pct * 100}%`, background: pct > 0.85 ? "var(--warn)" : "var(--free)" }} /></div>
           {payJars.length > 1 && (
             <div className="row small muted" style={{ gap: 12 }}>

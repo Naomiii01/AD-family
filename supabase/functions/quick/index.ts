@@ -32,9 +32,11 @@ Deno.serve(async (req) => {
   });
   if (r.error) return json({ ok: false, message: r.error.message });
   const payTxt = pm ? `（${pd || LABEL[pm]}）` : "";
+  const left = Number(r.data.left);
+  const tail = left < 0 ? `自由罐透支 ${-left} 元，記得從其他罐子補回來。` : `自由罐還剩 ${left} 元。`;
   return json({
     ok: true,
-    message: `${r.data.name} 已記帳：${item} ${amount} 元${payTxt}。自由罐還剩 ${r.data.left} 元。`,
+    message: `${r.data.name} 已記帳：${item} ${amount} 元${payTxt}。${tail}`,
     left: r.data.left,
   });
 });

@@ -514,3 +514,12 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: long_market_value
 -- long_values(member_id, month unique, value, principal = long-jar balance when recorded); RLS read via can_access.
 -- set_long_value(p_member, p_value): self or parent; upserts the current month.
+
+-- migration: overdraft_allowed
+-- advances.kind ('advance' | 'overdraft'). _add_expense_v2 no longer blocks on balance: jars may go negative (透支), returns left + jar_name.
+-- move_money: long jar never moves out; dream jar may move out for adults, and for kids only when a parent does it (kid's dream tiers restart).
+-- give_advance only counts kind = 'advance' for the once-per-quarter and unpaid checks.
+-- migration: overdraft_close_and_repay
+-- close_month: adults must cover overdrawn spendable jars first; a kid's overdraft is zeroed (ledger kind 'overdraft') and
+--   recorded as advances(kind 'overdraft') repaid from next month's allowance; months.alloc.overdraft stores it.
+-- plan_month_amt deducts every due advance/overdraft, not just one.

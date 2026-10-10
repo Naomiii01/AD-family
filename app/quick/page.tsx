@@ -29,11 +29,11 @@ export default function QuickPage() {
   async function add() {
     setBusy(true);
     setMsg("");
-    const [r, e] = await rpc("add_expense", { p_member: me.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat });
+    const [r, e] = await rpc<any>("add_expense_v3", { p_member: me.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: "free", p_pay_method: "", p_pay_detail: "" });
     setBusy(false);
     if (e) return setMsg(e);
     setLeft(r.left);
-    setMsg(`已記帳：${item} ${Math.round(+amt)} 元`);
+    setMsg(`已記帳：${item} ${Math.round(+amt)} 元${r.left < 0 ? `。自由罐透支 ${-r.left} 元，記得補回來` : ""}`);
     setItem("");
     setAmt("");
   }
