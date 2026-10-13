@@ -20,7 +20,8 @@ export default function More({ app }: { app: App }) {
       sub === "parent" && isParent ? <Parent app={app} /> :
       sub === "pin" ? <MyPin app={app} /> :
       sub === "skin" ? <SkinPicker app={app} /> :
-      sub === "jars" ? <JarManager app={app} /> : null;
+      sub === "jars" ? <JarManager app={app} /> :
+      sub === "logset" ? <LogSettings app={app} /> : null;
     return (
       <>
         <button className="back" onClick={() => go("more")}>‹ 更多</button>
@@ -35,6 +36,7 @@ export default function More({ app }: { app: App }) {
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
   items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
+  items.push(["logset", "帳", "free", "記帳設定" + who, sel.need_want === false ? "不分需要／想要" : "記帳可選需要／想要，月底補標"]);
   items.push(["skin", "色", "accent", "畫面風格與配色" + who, `${LOOKS[lookOf(sel)].name} · ${SKINS[skinOf(sel)].name}`]);
   if (isParent) items.push(["parent", "家", "free", "家長設定", "家人、零用金、密碼、獎勵、家庭銀行規則"]);
   items.push(["pin", "密", "ink", "更改我的登入密碼", `${me.name} 的 4 到 8 位數字密碼`]);
@@ -137,3 +139,43 @@ function SkinPicker({ app }: { app: App }) {
     </>
   );
 }
+
+function LogSettings({ app }: { app: App }) {
+  const { sel, isSelf, isParent, family, toast, reloadBase } = app;
+  const on = sel.need_want !== false;
+  async function setNw(v: boolean) {
+    const [, e] = await rpc("set_need_want", { p_member: sel.id, p_on: v });
+    if (e) return toast(e);
+    toast(v ? "已開啟需要／想要" : "已關閉需要／想要");
+    await reloadBase();
+  }
+  async function setStar(v: boolean) {
+    const [, e] = await rpc("set_star_label", { p_on: v });
+    if (e) return toast(e);
+    toast(v ? "孩子要標完才拿得到星星" : "標記不影響星星");
+    await reloadBase();
+  }
+  return (
+    <>
+      <section className="card">
+        <h2>需要／想要{isSelf ? "" : `（${sel.name}）`}</h2>
+        <p className="small muted">記帳時可以先不選，月底檢討再一次補標。關掉後，記帳和檢討都不會再出現需要／想要。</p>
+        <div className="seg" role="group" aria-label="需要想要開關">
+          <button className={on ? "on" : ""} onClick={() => setNw(true)}>開啟</button>
+          <button className={!on ? "on" : ""} onClick={() => setNw(false)}>關閉</button>
+        </div>
+      </section>
+      {isParent && (
+        <section className="card">
+          <h2>孩子的星星條件</h2>
+          <p className="small muted">開啟後，孩子每筆花費都要在月底前標好需要／想要，才拿得到當月星星。</p>
+          <div className="seg" role="group" aria-label="星星需要標記">
+            <button className={family.star_needs_label ? "on" : ""} onClick={() => setStar(true)}>要標完</button>
+            <button className={!family.star_needs_label ? "on" : ""} onClick={() => setStar(false)}>不影響星星</button>
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+

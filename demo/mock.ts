@@ -225,7 +225,9 @@ const F: Record<string, (a: any) => any> = {
     }
     const r = m.review || {};
     const weeksOk = weekProgress(p_member, p_month).ok;
-    const star = weeksOk && !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
+    let star = weeksOk && !!(r.next || "").trim() && (!!(r.best || "").trim() || !!(r.regret || "").trim());
+    const unlabeled = db.expenses.filter((e) => e.member_id === p_member && e.month === p_month && !e.voided && !e.type).length;
+    if (me.role === "kid" && fam.star_needs_label && me.need_want !== false && unlabeled > 0) star = false;
     Object.assign(m, { status: "closed", interest: it, moved: left, star, closed_at: now(), alloc: { ...m.alloc, bonus, weeks_ok: weeksOk, overdraft: od } });
     return { star, interest: it, moved: left, bonus, weeks_ok: weeksOk, overdraft: od };
   },
@@ -450,6 +452,18 @@ const F: Record<string, (a: any) => any> = {
     else db.long_values.push({ id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, value: p_value, principal, updated_at: now() });
     return { value: p_value, principal };
   },
+  set_expense_type: ({ p_id, p_type }) => {
+    const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
+    needAccess(e.member_id);
+    if (!["", "need", "want"].includes(p_type || "")) fail("請選「需要」或「想要」");
+    if (db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "closed")) fail("這個月已經結算了");
+    e.type = p_type || "";
+  },
+  set_need_want: ({ p_member, p_on }) => { needAccess(p_member); mem(p_member).need_want = p_on !== false; },
+  set_star_label: ({ p_on }) => {
+    if (!amParent()) fail("只有家長可以設定");
+    db.families.find((f) => f.id === myFam()).star_needs_label = !!p_on;
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
@@ -503,7 +517,7 @@ function addExpense({ p_member, p_item, p_amount, p_type, p_category, p_jar }: a
   if (!m) fail("這個月還沒做月初規劃，先到「本月」把零用金放進罐子");
   if (m.status === "closed") fail("這個月已經結算了");
   const free = bal(p_member, jar);
-  const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type,
+  const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, month: mk, item: p_item.trim().slice(0, 40), amount: p_amount, type: p_type || "",
     category: p_category || "其他", source, jar, pay_method: "", pay_detail: "", voided: false, spent_on: at ? at.slice(0, 10) : todayTW(), created_at: at || now() };
   db.expenses.push(row);
   log(p_member, jar, -p_amount, row.item, mk, "expense", at);

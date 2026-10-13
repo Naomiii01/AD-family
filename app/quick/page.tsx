@@ -8,7 +8,7 @@ export default function QuickPage() {
   const [left, setLeft] = useState<number | null>(null);
   const [item, setItem] = useState("");
   const [amt, setAmt] = useState("");
-  const [type, setType] = useState<"need" | "want">("want");
+  const [type, setType] = useState<"" | "need" | "want">("");
   const [cat, setCat] = useState("飲料點心");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,8 +55,8 @@ export default function QuickPage() {
         <label className="f">買了什麼<input id="q-item" maxLength={40} placeholder="例如：手搖飲" value={item} onChange={(e) => setItem(e.target.value)} /></label>
         <div className="chips">{CATS.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}</div>
         <div className="seg">
-          <button className={type === "need" ? "on" : ""} onClick={() => setType("need")}>需要</button>
-          <button className={type === "want" ? "on" : ""} onClick={() => setType("want")}>想要</button>
+          <button className={type === "need" ? "on" : ""} onClick={() => setType(type === "need" ? "" : "need")}>需要</button>
+          <button className={type === "want" ? "on" : ""} onClick={() => setType(type === "want" ? "" : "want")}>想要</button>
         </div>
         <button className="btn primary big" disabled={busy} onClick={add}>記下來</button>
         {msg && <p className="small center" role="status">{msg}</p>}

@@ -1,4 +1,4 @@
-// Apple Shortcuts endpoint: POST {token, item, amount, type, category, pay, pay_method}. Always answers 200 with a readable message.
+// Apple Shortcuts endpoint: POST {token, item, amount, type?, category?, pay?, pay_method?}. Always answers 200 with a readable message.
 // `pay` is free text such as "LINE Pay", "國泰世華 CUBE卡" (Apple Pay card name) or "現金"; the method is inferred when pay_method is absent.
 import { admin, cors, json, readBody } from "../_shared/util.ts";
 
@@ -21,8 +21,8 @@ Deno.serve(async (req) => {
   const token = String(b.token ?? "").trim();
   const item = String(b.item ?? "").trim();
   const amount = Math.round(Number(String(b.amount ?? "").replace(/[^\d.]/g, "")));
-  const typeRaw = String(b.type ?? "want");
-  const type = /need|需要/.test(typeRaw) ? "need" : "want";
+  const typeRaw = String(b.type ?? "");
+  const type = /need|需要/.test(typeRaw) ? "need" : /want|想要/.test(typeRaw) ? "want" : "";
   const category = String(b.category ?? "").trim();
   const [pm, pd] = inferPay(String(b.pay_method ?? ""), String(b.pay ?? ""));
   if (!token) return json({ ok: false, message: "缺少記帳碼，請重新設定捷徑" });

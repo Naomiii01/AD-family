@@ -192,7 +192,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const ex = useExpenses(sel.id, mk);
   const [item, setItem] = useState("");
   const [amt, setAmt] = useState("");
-  const [type, setType] = useState<"need" | "want">("want");
+  const [type, setType] = useState<"" | "need" | "want">("");
+  const nwOn = sel.need_want !== false;
   const [cat, setCat] = useState("飲料點心");
   const [payJar, setPayJar] = useState("free");
   const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
@@ -215,12 +216,13 @@ function Active({ app, mo }: { app: App; mo: any }) {
     toast(r && r.left < 0 ? `記下來了。${r.jar_name || "罐子"}透支 ${fmt(-r.left)}，記得補回來` : "記下來了");
     setItem("");
     setAmt("");
+    setType(payJar === "fixed" ? "need" : "");
     await Promise.all([ex.reload(), data.reload()]);
   }
   function pickJar(k: string) {
     if ((k === "fixed") !== (payJar === "fixed")) {
       setCat(catsFor(k)[0]);
-      setType(k === "fixed" ? "need" : "want");
+      setType(k === "fixed" ? "need" : "");
     }
     setPayJar(k);
   }
@@ -283,10 +285,15 @@ function Active({ app, mo }: { app: App; mo: any }) {
           </div>
           <div className="small muted">怎麼付的</div>
           <PayPicker mid={sel.id} value={pay} onChange={setPay} history={ex.list} />
-          <div className="seg" role="group" aria-label="需要或想要">
-            <button className={type === "need" ? "on" : ""} onClick={() => setType("need")}>需要（非買不可）</button>
-            <button className={type === "want" ? "on" : ""} onClick={() => setType("want")}>想要（可以不買）</button>
-          </div>
+          {nwOn && (
+            <div>
+              <div className="small muted">需要還是想要？<span className="note">（可以先不選，月底檢討再補）</span></div>
+              <div className="seg" role="group" aria-label="需要或想要">
+                <button className={type === "need" ? "on" : ""} onClick={() => setType(type === "need" ? "" : "need")}>需要</button>
+                <button className={type === "want" ? "on" : ""} onClick={() => setType(type === "want" ? "" : "want")}>想要</button>
+              </div>
+            </div>
+          )}
           <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
         </section>
       )}
@@ -306,7 +313,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             {ex.list.map((e) => (
               <div className="li" key={e.id}>
                 <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span> <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}
+                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}
                   {" "}{mo.status === "active"
                     ? <button className={`tag pay-${e.pay_method || "none"}`} onClick={() => setEditPay(editPay?.id === e.id ? null : { id: e.id, p: { m: e.pay_method || "cash", d: e.pay_detail || "" } })} aria-label={`修改 ${e.item} 的支付方式`}>{payLabel(e) || "＋支付方式"}</button>
                     : payLabel(e) && <span className={`tag pay-${e.pay_method}`}>{payLabel(e)}</span>}

@@ -8,6 +8,7 @@ import { fmt, mkLabel, gd, jarList, jarName, curMonth } from "@/lib/util";
 import { MonthNav, Confirm } from "./ui";
 import { useExpenses } from "./Month";
 import { useWeeks, WeekList } from "./Weeks";
+import { CategoryPie } from "./CategoryPie";
 
 export default function Review({ app }: { app: App }) {
   const { data, sel, mk, setMk, toast, family } = app;
@@ -34,25 +35,33 @@ export default function Review({ app }: { app: App }) {
 
   const sp = ex.list.reduce((s, e) => s + e.amount, 0);
   const need = ex.list.filter((e) => e.type === "need").reduce((s, e) => s + e.amount, 0);
-  const want = sp - need;
-  const cats: Record<string, number> = {};
-  ex.list.forEach((e) => (cats[e.category] = (cats[e.category] || 0) + e.amount));
-  const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const want = ex.list.filter((e) => e.type === "want").reduce((s, e) => s + e.amount, 0);
+  const unl = sp - need - want;
+  const nwOn = sel.need_want !== false;
+  const unlabeled = ex.list.filter((e) => !e.type);
+  async function label(id: string, t: string) {
+    const [, e] = await rpc("set_expense_type", { p_id: id, p_type: t });
+    if (e) return toast(e);
+    await ex.reload();
+  }
 
   const stat = (
     <section className="card">
       <h3>這個月花在哪</h3>
       <div className="kv"><span>自由罐可用</span><b>{fmt(mo.free_start)}</b></div>
       <div className="kv"><span>實際花掉</span><b>{fmt(sp)}</b></div>
-      {sp > 0 && (
+      {sp > 0 && <CategoryPie list={ex.list} />}
+      {sp > 0 && nwOn && need + want > 0 && (
         <>
+          <h3 style={{ marginTop: 6 }}>需要／想要</h3>
           <div className="bar">
             <span style={{ width: `${(need / sp) * 100}%`, background: "var(--long)" }} />
             <span style={{ left: `${(need / sp) * 100}%`, width: `${(want / sp) * 100}%`, background: "var(--free)" }} />
           </div>
-          <div className="legend"><span><i style={{ background: "var(--long)" }} />需要 {fmt(need)}</span><span><i style={{ background: "var(--free)" }} />想要 {fmt(want)}</span></div>
-          <div className="list">
-            {topCats.map(([c, v]) => <div className="kv small" key={c}><span>{c}</span><b>{fmt(v)}</b></div>)}
+          <div className="legend">
+            <span><i style={{ background: "var(--long)" }} />需要 {fmt(need)}（{Math.round((need / sp) * 100)}%）</span>
+            <span><i style={{ background: "var(--free)" }} />想要 {fmt(want)}（{Math.round((want / sp) * 100)}%）</span>
+            {unl > 0 && <span><i style={{ background: "var(--line)" }} />還沒標 {fmt(unl)}</span>}
           </div>
         </>
       )}
@@ -128,6 +137,24 @@ export default function Review({ app }: { app: App }) {
         {bonusPreview > 0 && <div className="kv"><span>結算時夢想加碼</span><b style={{ color: "var(--dream)" }}>+{fmt(bonusPreview)}</b></div>}
       </section>
       {left < 0 && <Overdraft app={app} />}
+      {nwOn && unlabeled.length > 0 && (
+        <section className="card">
+          <div className="card-h"><h3>補標：需要還是想要？</h3><span className="small muted">還有 {unlabeled.length} 筆</span></div>
+          <p className="small muted">隔幾天再回頭看，比較看得出當時是不是真的需要。{sel.role === "kid" && family.star_needs_label ? "全部標完才拿得到星星。" : ""}</p>
+          <div className="list">
+            {unlabeled.map((e) => (
+              <div className="li" key={e.id} style={{ gridTemplateColumns: "1fr auto auto" }}>
+                <span className="t">{e.item} <span className="note">{e.category}</span></span>
+                <b className="num">{fmt(e.amount)}</b>
+                <span className="nw-pick">
+                  <button onClick={() => label(e.id, "need")}>需要</button>
+                  <button onClick={() => label(e.id, "want")}>想要</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="card"><BorrowStat app={app} always /></section>
       {mk === curMonth() && <LongValueCard app={app} />}
       <section className="card">
@@ -140,7 +167,7 @@ export default function Review({ app }: { app: App }) {
         ))}
       </section>
       <section className="card">
-        <h3>本月星星 ★ 的兩個條件</h3>
+        <h3>本月星星 ★ 的條件</h3>
         {(() => {
           const qa = !!rv.next.trim() && (!!rv.best.trim() || !!rv.regret.trim());
           const wkOk = family.star_days === 0 || !!wk.w?.ok;
@@ -149,6 +176,9 @@ export default function Review({ app }: { app: App }) {
               <div className="kv small"><span>{wkOk ? "✓" : "○"} 每週至少記帳 {family.star_days} 天</span><b style={{ color: wkOk ? "var(--accent)" : "var(--warn)" }}>{wkOk ? "達成" : "還沒達成"}</b></div>
               {wk.w && family.star_days > 0 && <WeekList w={wk.w} />}
               <div className="kv small"><span>{qa ? "✓" : "○"} 回答第 3 題，再加上第 1 或第 2 題</span><b style={{ color: qa ? "var(--accent)" : "var(--warn)" }}>{qa ? "達成" : "還沒達成"}</b></div>
+              {sel.role === "kid" && family.star_needs_label && nwOn && (
+                <div className="kv small"><span>{unlabeled.length ? "○" : "✓"} 每筆花費都標好需要／想要</span><b style={{ color: unlabeled.length ? "var(--warn)" : "var(--accent)" }}>{unlabeled.length ? `還有 ${unlabeled.length} 筆` : "達成"}</b></div>
+              )}
             </>
           );
         })()}

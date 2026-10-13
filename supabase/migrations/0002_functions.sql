@@ -523,3 +523,10 @@ alter table public.families add column if not exists guardian text not null defa
 -- close_month: adults must cover overdrawn spendable jars first; a kid's overdraft is zeroed (ledger kind 'overdraft') and
 --   recorded as advances(kind 'overdraft') repaid from next month's allowance; months.alloc.overdraft stores it.
 -- plan_month_amt deducts every due advance/overdraft, not just one.
+
+-- migration: need_want_optional
+-- expenses.type allows '' (not labeled yet); members.need_want (personal on/off); families.star_needs_label.
+-- _add_expense_v2 / quick_add keep an empty type; set_expense_type(p_id, p_type) labels later (unclosed month);
+-- set_need_want(p_member, p_on); set_star_label(p_on) parents only.
+-- migration: star_requires_labels
+-- close_month: when star_needs_label is on, a kid with unlabeled expenses gets no star; alloc.unlabeled records the count.
