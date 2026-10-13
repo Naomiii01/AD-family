@@ -530,3 +530,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- set_need_want(p_member, p_on); set_star_label(p_on) parents only.
 -- migration: star_requires_labels
 -- close_month: when star_needs_label is on, a kid with unlabeled expenses gets no star; alloc.unlabeled records the count.
+
+-- migration: grant_need_want_column
+-- members/families use column-level SELECT grants; new columns must be granted explicitly:
+-- grant select (need_want) on members to authenticated; grant select (star_needs_label) on families to authenticated;
