@@ -538,3 +538,6 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: edit_income_split
 -- set_income_split(p_id, p_split): move an income to other jars in an active month; old shares logged as income_void
 -- (dream/long must still hold their share), new shares as income.
+
+-- migration: edit_expense_jar
+-- set_expense_jar(p_id, p_jar): move an expense to another spendable jar in an active month (refund old jar, charge new).

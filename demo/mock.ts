@@ -481,6 +481,19 @@ const F: Record<string, (a: any) => any> = {
     for (const [k, v] of Object.entries(nw) as [string, number][]) log(r.member_id, k, v, "收入：" + r.source, r.month, "income");
     r.split = nw;
   },
+  set_expense_jar: ({ p_id, p_jar }) => {
+    const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
+    needAccess(e.member_id);
+    const jar = p_jar || "free";
+    if (jar === "dream" || jar === "long") fail("夢想罐和長期罐不能用來付一般花費");
+    if (!jarKeys(e.member_id).includes(jar)) fail("沒有這個罐子");
+    if (!db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    const old = e.jar || "free";
+    if (old === jar) return;
+    log(e.member_id, old, e.amount, `改由${jarNm(e.member_id, jar)}支付：${e.item}`, e.month, "refund");
+    log(e.member_id, jar, -e.amount, e.item, e.month, "expense");
+    e.jar = jar;
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });

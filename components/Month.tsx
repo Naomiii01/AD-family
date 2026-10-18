@@ -197,7 +197,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const [cat, setCat] = useState("飲料點心");
   const [payJar, setPayJar] = useState("free");
   const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
-  const [editPay, setEditPay] = useState<{ id: string; p: Pay } | null>(null);
+  const [editPay, setEditPay] = useState<{ id: string; p: Pay; jar: string } | null>(null);
+  const openEdit = (e: any) => setEditPay(editPay?.id === e.id ? null : { id: e.id, p: { m: e.pay_method || "cash", d: e.pay_detail || "" }, jar: e.jar || "free" });
   const [busy, setBusy] = useState(false);
   const isCur = mk === curMonth();
   const sp = ex.list.reduce((s, e) => s + e.amount, 0);
@@ -228,12 +229,17 @@ function Active({ app, mo }: { app: App; mo: any }) {
   }
   async function savePay() {
     if (!editPay) return;
+    const old = ex.list.find((x) => x.id === editPay.id);
+    if (old && (old.jar || "free") !== editPay.jar) {
+      const [, ej] = await rpc("set_expense_jar", { p_id: editPay.id, p_jar: editPay.jar });
+      if (ej) return toast(ej);
+    }
     const [, e] = await rpc("set_expense_pay", { p_id: editPay.id, p_pay_method: editPay.p.m, p_pay_detail: editPay.p.d });
     if (e) return toast(e);
     rememberPay(sel.id, editPay.p);
     setEditPay(null);
-    toast("支付方式已更新");
-    await ex.reload();
+    toast("已更新");
+    await Promise.all([ex.reload(), data.reload()]);
   }
   async function del(id: string) {
     const [, e] = await rpc("delete_expense", { p_id: id });
@@ -313,16 +319,27 @@ function Active({ app, mo }: { app: App; mo: any }) {
             {ex.list.map((e) => (
               <div className="li" key={e.id}>
                 <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span></>}
+                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> {mo.status === "active"
+                  ? <button className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }} onClick={() => openEdit(e)}>{jarName(sel, e.jar)}</button>
+                  : <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span>}</>}
                   {" "}{mo.status === "active"
-                    ? <button className={`tag pay-${e.pay_method || "none"}`} onClick={() => setEditPay(editPay?.id === e.id ? null : { id: e.id, p: { m: e.pay_method || "cash", d: e.pay_detail || "" } })} aria-label={`修改 ${e.item} 的支付方式`}>{payLabel(e) || "＋支付方式"}</button>
+                    ? <button className={`tag pay-${e.pay_method || "none"}`} onClick={() => openEdit(e)} aria-label={`修改 ${e.item} 的罐子或支付方式`}>{payLabel(e) || "＋支付方式"}</button>
                     : payLabel(e) && <span className={`tag pay-${e.pay_method}`}>{payLabel(e)}</span>}
                 </span>
                 <b className="num">{num(e.amount)}</b>
                 {mo.status === "active" ? <button className="x" onClick={() => del(e.id)} aria-label={`刪除 ${e.item}`}>×</button> : <span />}
                 {editPay?.id === e.id && (
                   <div className="pay-edit">
-                    <PayPicker mid={sel.id} value={editPay.p} onChange={(p) => setEditPay({ id: e.id, p })} history={ex.list} />
+                    {payJars.length > 1 && (
+                      <>
+                        <div className="small muted">從哪個罐子付</div>
+                        <div className="seg" role="group" aria-label="從哪個罐子付">
+                          {payJars.map((j) => <button key={j.key} className={editPay.jar === j.key ? "on" : ""} onClick={() => setEditPay({ ...editPay, jar: j.key })}>{j.name}</button>)}
+                        </div>
+                        <div className="small muted">怎麼付的</div>
+                      </>
+                    )}
+                    <PayPicker mid={sel.id} value={editPay.p} onChange={(p) => setEditPay({ ...editPay, p })} history={ex.list} />
                     <div className="row" style={{ gap: 8 }}>
                       <button className="btn sm primary" onClick={savePay}>儲存</button>
                       <button className="btn sm" onClick={() => setEditPay(null)}>取消</button>
