@@ -32,11 +32,21 @@ export function IncomeCard({ app, mo, canAdd, onChange }: { app: App; mo: any; c
   const [open, setOpen] = useState(false);
   const [src, setSrc] = useState("");
   const [amt, setAmt] = useState("");
-  const [cat, setCat] = useState(cats[0]);
-  const [to, setTo] = useState<string>("ratio");
+  const toKey = `adf-inc-to-${sel.id}`;
+  const savedTo = (c: string): string => {
+    try { const v = JSON.parse(localStorage.getItem(toKey) || "{}")[c]; return v && (v === "ratio" || jars.some((j) => j.key === v)) ? v : "ratio"; } catch { return "ratio"; }
+  };
+  const rememberTo = (c: string, t: string) => {
+    try { localStorage.setItem(toKey, JSON.stringify({ ...JSON.parse(localStorage.getItem(toKey) || "{}"), [c]: t })); } catch { /* storage unavailable */ }
+  };
+  const [cat, setCatRaw] = useState(cats[0]);
+  const [to, setTo] = useState<string>(() => savedTo(cats[0]));
+  const setCat = (c: string) => { setCatRaw(c); setTo(savedTo(c)); };
+  const [edit, setEdit] = useState<{ id: string; to: string } | null>(null);
+  const splitFor = (t: string, a: number): Record<string, number> => (t === "ratio" ? byRatio(jars.map((j) => j.key), mo.ratio || {}, a) : { [t]: a });
   const [busy, setBusy] = useState(false);
   const amount = Math.max(0, Math.round(+amt || 0));
-  const split: Record<string, number> = to === "ratio" ? byRatio(jars.map((j) => j.key), mo.ratio || {}, amount) : { [to]: amount };
+  const split = splitFor(to, amount);
   const total = inc.list.reduce((s, x) => s + x.amount, 0);
 
   async function add() {
@@ -44,8 +54,19 @@ export function IncomeCard({ app, mo, canAdd, onChange }: { app: App; mo: any; c
     const [, e] = await rpc("add_income", { p_member: sel.id, p_source: src || cat, p_category: cat, p_amount: amount, p_split: split });
     setBusy(false);
     if (e) return toast(e);
+    rememberTo(cat, to);
     toast("收入記好了，已經放進罐子");
     setSrc(""); setAmt(""); setOpen(false);
+    await Promise.all([inc.reload(), data.reload()]);
+    onChange();
+  }
+  async function saveEdit(x: any) {
+    if (!edit) return;
+    const [, e] = await rpc("set_income_split", { p_id: x.id, p_split: splitFor(edit.to, x.amount) });
+    if (e) return toast(e);
+    rememberTo(x.category, edit.to);
+    setEdit(null);
+    toast("已改放到新的罐子");
     await Promise.all([inc.reload(), data.reload()]);
     onChange();
   }
@@ -67,10 +88,27 @@ export function IncomeCard({ app, mo, canAdd, onChange }: { app: App; mo: any; c
             <div className="li" key={x.id}>
               <span className="d">{shortDate(x.created_at)}</span>
               <span className="t">{x.source} {x.source !== x.category && <span className="tag income">{x.category}</span>}{" "}
-                <span className="note">{Object.entries(x.split as Record<string, number>).map(([k, v]) => `${jarName(sel, k)} ${num(v)}`).join("、")}</span>
+                {canAdd
+                  ? <button className="link-note" onClick={() => setEdit(edit?.id === x.id ? null : { id: x.id, to: Object.keys(x.split).length === 1 ? Object.keys(x.split)[0] : "ratio" })} aria-label={`改 ${x.source} 放的罐子`}>
+                      {Object.entries(x.split as Record<string, number>).map(([k, v]) => `${jarName(sel, k)} ${num(v)}`).join("、")} ✎
+                    </button>
+                  : <span className="note">{Object.entries(x.split as Record<string, number>).map(([k, v]) => `${jarName(sel, k)} ${num(v)}`).join("、")}</span>}
               </span>
               <b className="num" style={{ color: "var(--long)" }}>+{num(x.amount)}</b>
               {canAdd ? <button className="x" onClick={() => del(x.id)} aria-label={`刪除 ${x.source}`}>×</button> : <span />}
+              {edit?.id === x.id && (
+                <div className="pay-edit">
+                  <div className="small muted">改放到哪裡</div>
+                  <div className="chips" role="group" aria-label="改放哪個罐子">
+                    <button className={`chip ${edit.to === "ratio" ? "on" : ""}`} onClick={() => setEdit({ ...edit, to: "ratio" })}>照本月比例分</button>
+                    {jars.map((j) => <button key={j.key} className={`chip ${edit.to === j.key ? "on" : ""}`} onClick={() => setEdit({ ...edit, to: j.key })}>全部放{j.name}</button>)}
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button className="btn sm primary" onClick={() => saveEdit(x)}>儲存</button>
+                    <button className="btn sm" onClick={() => setEdit(null)}>取消</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -78,7 +116,7 @@ export function IncomeCard({ app, mo, canAdd, onChange }: { app: App; mo: any; c
       {canAdd && !open && (
         <>
           {!inc.list.length && <p className="small muted">{sel.role === "kid" ? "獎學金、比賽獎金、打工、紅包，拿到時記在這裡。" : "兼職、業外、獎金、紅包，月中有進帳就記在這裡。"}</p>}
-          <button className="btn" onClick={() => setOpen(true)}>＋ 記一筆收入</button>
+          <button className="btn" onClick={() => { setTo(savedTo(cat)); setOpen(true); }}>＋ 記一筆收入</button>
         </>
       )}
       {canAdd && open && (

@@ -534,3 +534,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: grant_need_want_column
 -- members/families use column-level SELECT grants; new columns must be granted explicitly:
 -- grant select (need_want) on members to authenticated; grant select (star_needs_label) on families to authenticated;
+
+-- migration: edit_income_split
+-- set_income_split(p_id, p_split): move an income to other jars in an active month; old shares logged as income_void
+-- (dream/long must still hold their share), new shares as income.

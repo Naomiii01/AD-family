@@ -464,6 +464,23 @@ const F: Record<string, (a: any) => any> = {
     if (!amParent()) fail("只有家長可以設定");
     db.families.find((f) => f.id === myFam()).star_needs_label = !!p_on;
   },
+  set_income_split: ({ p_id, p_split }) => {
+    const r = db.incomes.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆收入");
+    needAccess(r.member_id);
+    let sum = 0;
+    for (const [k, v] of Object.entries(p_split || {}) as [string, number][]) {
+      if (!jarKeys(r.member_id).includes(k)) fail("沒有這個罐子");
+      if (v < 0) fail("金額不正確");
+      sum += v;
+    }
+    if (sum !== r.amount) fail(`分到各罐的金額加起來要等於 ${r.amount} 元`);
+    if (!db.months.some((m) => m.member_id === r.member_id && m.month === r.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    for (const [k, v] of Object.entries(r.split) as [string, number][]) if ((k === "dream" || k === "long") && bal(r.member_id, k) < v) fail(`${jarNm(r.member_id, k)}的錢已經用掉了，不能改這筆收入`);
+    const nw = Object.fromEntries(Object.entries(p_split).filter(([, v]) => (v as number) > 0));
+    for (const [k, v] of Object.entries(r.split) as [string, number][]) log(r.member_id, k, -v, "收入改放其他罐：" + r.source, r.month, "income_void");
+    for (const [k, v] of Object.entries(nw) as [string, number][]) log(r.member_id, k, v, "收入：" + r.source, r.month, "income");
+    r.split = nw;
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
