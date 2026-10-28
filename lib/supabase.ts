@@ -10,6 +10,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 });
 
 export const QUICK_URL = `${SUPABASE_URL}/functions/v1/quick`;
+export const NOTIFY_URL = `${SUPABASE_URL}/functions/v1/notify`;
+/** iCloud link of the shared 「從通知記帳」 shortcut (asks for the 記帳碼 on import). Empty until one is published. */
+export const NOTIFY_SHORTCUT = process.env.NEXT_PUBLIC_NOTIFY_SHORTCUT || "";
 
 export const MEMBER_COLS = "id,family_id,user_id,name,role,allowance,color,is_owner,archived,theme,look,extra_jars,need_want,created_at";
 

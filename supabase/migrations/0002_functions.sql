@@ -541,3 +541,8 @@ alter table public.families add column if not exists guardian text not null defa
 
 -- migration: edit_expense_jar
 -- set_expense_jar(p_id, p_jar): move an expense to another spendable jar in an active month (refund old jar, charge new).
+
+-- migration: notify_add
+-- notify_add(token, item, amount, pay_method, pay_detail): service role only; used by edge function `notify`
+-- (iOS 27 notification automation). Same amount within 10 minutes = same payment, recorded once (fills in missing
+-- merchant/payment detail). Records with source 'notify', type '' and category 其他.

@@ -319,7 +319,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             {ex.list.map((e) => (
               <div className="li" key={e.id}>
                 <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.jar && e.jar !== "free" && <> {mo.status === "active"
+                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.source === "notify" && <> <span className="tag shortcut">自動</span></>}{e.jar && e.jar !== "free" && <> {mo.status === "active"
                   ? <button className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }} onClick={() => openEdit(e)}>{jarName(sel, e.jar)}</button>
                   : <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span>}</>}
                   {" "}{mo.status === "active"
