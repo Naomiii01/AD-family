@@ -117,17 +117,17 @@ export default function QuickSetup({ app }: { app: App }) {
               <div className="small">① 加入「URL」，貼上：</div>
               <div className="mono">{NOTIFY_URL}</div>
               <div className="small">② 加入「取得 URL 內容」：方法 POST、要求本文 JSON，欄位：</div>
-              <div className="mono">token → 記帳碼<br />app → 「捷徑輸入」→ App 名稱<br />title → 「捷徑輸入」→ 標題<br />body → 「捷徑輸入」→ 內文</div>
-              <div className="small">③ 加入「取得辭典值」（message）和「顯示通知」（辭典值）。</div>
+              <div className="mono">token → 記帳碼<br />body → 「捷徑輸入」（類型選「文字」）</div>
+              <div className="small">③ 加入「取得辭典值」（message），再加「如果」：辭典值「有任何值」，裡面放「顯示通知」（辭典值）。不是付款的通知（例如一般 LINE 訊息）就不會跳任何東西。</div>
               <span className="note">選單裡的名稱如果不一樣，選最接近的（通知的標題、內容）。家裡一個人建好後，可以「分享 → 拷貝 iCloud 連結」給家人，只要換自己的記帳碼。</span>
             </li>
           )}
           <li>捷徑 App 下方「<b>自動化</b>」→ 右上角 ＋ → 選「<b>通知</b>」。</li>
-          <li>App 勾選你會收到付款通知的：<b>LINE、街口、全支付、悠遊付、銀行 App、錢包</b>（只能選一個的話，就每個 App 各建一個自動化）。</li>
+          <li>App 勾選你會收到付款通知的：<b>LINE、街口、全支付、悠遊付、銀行 App、錢包</b>（只能選一個的話，就每個 App 各建一個自動化）。LINE 可以設定「標題包含 LINE Pay」，一般聊天訊息就不會觸發。</li>
           <li>選「<b>立即執行</b>」，動作選「執行捷徑」→「從通知記帳」，輸入選「捷徑輸入」。</li>
           <li>付一筆小錢試試，跳出「已自動記帳：…」就成功了。自動記的花費會標「自動」，可以再改分類、需要／想要。</li>
         </ol>
-        <p className="note">通知內容只會傳到我們自己的伺服器讀出金額和店名，不會存下來。已經設定「錢包」自動化的人也不會重複記。</p>
+        <p className="note">通知內容只會傳到我們自己的伺服器讀出金額和店名，不會存下來；看起來不像付款的通知會直接略過。已經設定「錢包」自動化的人也不會重複記。</p>
       </section>
 
       <section className="card">

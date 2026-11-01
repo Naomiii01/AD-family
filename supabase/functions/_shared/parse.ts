@@ -3,7 +3,11 @@
 
 export type Parsed =
   | { kind: "expense"; amount: number; item: string; payMethod: string; payDetail: string }
-  | { kind: "skip"; reason: string };
+  | { kind: "skip"; reason: string; quiet?: boolean };
+
+// A notification must look like a payment at all; anything else (chat messages, news, promos) is ignored silently.
+const PAYMENT_HINT = /付款|消費|刷卡|扣款|支付|交易|購買|pay|NT\s*\$|NTD|新[台臺]幣|金額/i;
+const REFUND = /退款|退貨|退刷|取消交易|交易取消|已取消/;
 
 const BANKS = [
   "國泰世華", "中國信託", "中信", "台新", "玉山", "台北富邦", "富邦", "永豐", "兆豐", "聯邦", "第一銀行", "一銀", "華南", "彰化銀行", "彰銀",
@@ -27,8 +31,9 @@ function toInt(s: string) {
 export function parseNotification(app: string, title: string, body: string): Parsed {
   const text = [title, body].filter(Boolean).join("\n").replace(/ /g, " ");
   const all = `${app}\n${text}`;
-  if (!text.trim()) return { kind: "skip", reason: "通知沒有內容" };
-  if (NOT_SPEND.test(text)) return { kind: "skip", reason: "這則通知看起來不是消費（例如退款、儲值、帳單或優惠）" };
+  if (!text.trim() || !PAYMENT_HINT.test(all)) return { kind: "skip", reason: "不是付款通知", quiet: true };
+  if (REFUND.test(text)) return { kind: "skip", reason: "這是退款或取消交易的通知" };
+  if (NOT_SPEND.test(text)) return { kind: "skip", reason: "不是消費（轉帳、儲值、帳單、優惠或驗證碼）", quiet: true };
 
   // Amount: currency-marked numbers first, then "金額：", then "...元".
   const pats = [
