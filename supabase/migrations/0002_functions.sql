@@ -546,3 +546,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- notify_add(token, item, amount, pay_method, pay_detail): service role only; used by edge function `notify`
 -- (iOS 27 notification automation). Same amount within 10 minutes = same payment, recorded once (fills in missing
 -- merchant/payment detail). Records with source 'notify', type '' and category 其他.
+
+-- migration: simple_log_mode
+-- members.simple_log boolean (null = default by role: kids simple, adults full); column SELECT granted to authenticated;
+-- set_simple_log(p_member, p_on).

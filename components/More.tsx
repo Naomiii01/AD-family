@@ -7,6 +7,7 @@ import Rules from "./Rules";
 import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
 import JarManager from "./JarManager";
+import { simpleOf } from "./QuickLog";
 import { SKINS, SkinKey, skinOf, LOOKS, LookKey, lookOf } from "@/lib/themes";
 import { gd, jarList } from "@/lib/util";
 
@@ -36,7 +37,7 @@ export default function More({ app }: { app: App }) {
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
   items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
-  items.push(["logset", "帳", "free", "記帳設定" + who, sel.need_want === false ? "不分需要／想要" : "記帳可選需要／想要，月底補標"]);
+  items.push(["logset", "帳", "free", "記帳設定" + who, `${simpleOf(sel) ? "簡易記帳" : "完整記帳"} · ${sel.need_want === false ? "不分需要／想要" : "需要／想要月底補標"}`]);
   items.push(["skin", "色", "accent", "畫面風格與配色" + who, `${LOOKS[lookOf(sel)].name} · ${SKINS[skinOf(sel)].name}`]);
   if (isParent) items.push(["parent", "家", "free", "家長設定", "家人、零用金、密碼、獎勵、家庭銀行規則"]);
   items.push(["pin", "密", "ink", "更改我的登入密碼", `${me.name} 的 4 到 8 位數字密碼`]);
@@ -143,6 +144,13 @@ function SkinPicker({ app }: { app: App }) {
 function LogSettings({ app }: { app: App }) {
   const { sel, isSelf, isParent, family, toast, reloadBase } = app;
   const on = sel.need_want !== false;
+  const simple = simpleOf(sel);
+  async function setSimple(v: boolean) {
+    const [, e] = await rpc("set_simple_log", { p_member: sel.id, p_on: v });
+    if (e) return toast(e);
+    toast(v ? "已切換成簡易記帳" : "已切換成完整記帳");
+    await reloadBase();
+  }
   async function setNw(v: boolean) {
     const [, e] = await rpc("set_need_want", { p_member: sel.id, p_on: v });
     if (e) return toast(e);
@@ -157,6 +165,14 @@ function LogSettings({ app }: { app: App }) {
   }
   return (
     <>
+      <section className="card">
+        <h2>記帳畫面{isSelf ? "" : `（${sel.name}）`}</h2>
+        <p className="small muted">簡易記帳：輸入金額、點一個圖示就記好，打開 App 的「罐子」頁就能直接記。孩子預設是簡易，大人預設是完整。</p>
+        <div className="seg" role="group" aria-label="記帳畫面">
+          <button className={simple ? "on" : ""} onClick={() => setSimple(true)}>簡易</button>
+          <button className={!simple ? "on" : ""} onClick={() => setSimple(false)}>完整</button>
+        </div>
+      </section>
       <section className="card">
         <h2>需要／想要{isSelf ? "" : `（${sel.name}）`}</h2>
         <p className="small muted">記帳時可以先不選，月底檢討再一次補標。關掉後，記帳和檢討都不會再出現需要／想要。</p>

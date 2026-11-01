@@ -14,7 +14,7 @@ export const NOTIFY_URL = `${SUPABASE_URL}/functions/v1/notify`;
 /** iCloud link of the shared 「從通知記帳」 shortcut (asks for the 記帳碼 on import). Empty until one is published. */
 export const NOTIFY_SHORTCUT = process.env.NEXT_PUBLIC_NOTIFY_SHORTCUT || "";
 
-export const MEMBER_COLS = "id,family_id,user_id,name,role,allowance,color,is_owner,archived,theme,look,extra_jars,need_want,created_at";
+export const MEMBER_COLS = "id,family_id,user_id,name,role,allowance,color,is_owner,archived,theme,look,extra_jars,need_want,simple_log,created_at";
 
 /** Calls a database function and returns [data, errorMessage]. */
 export async function rpc<T = any>(fn: string, args: Record<string, unknown> = {}): Promise<[T | null, string | null]> {

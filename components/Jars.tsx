@@ -1,5 +1,6 @@
 "use client";
 import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal";
+import { QuickLog, simpleOf } from "./QuickLog";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, supabase } from "@/lib/supabase";
@@ -50,6 +51,7 @@ export default function Jars({ app }: { app: App }) {
         </div>
       ))}
       <Overdraft app={app} />
+      {cur?.status === "active" && simpleOf(sel) && <QuickLog app={app} />}
       <div className="trio">
         <div className="jarcol">
           <JarSVG kind="free" pct={freeP} />

@@ -461,6 +461,7 @@ const F: Record<string, (a: any) => any> = {
     if (db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "closed")) fail("這個月已經結算了");
     e.type = p_type || "";
   },
+  set_simple_log: ({ p_member, p_on }) => { needAccess(p_member); mem(p_member).simple_log = p_on; },
   set_need_want: ({ p_member, p_on }) => { needAccess(p_member); mem(p_member).need_want = p_on !== false; },
   set_star_label: ({ p_on }) => {
     if (!amParent()) fail("只有家長可以設定");

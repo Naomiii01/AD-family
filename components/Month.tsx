@@ -7,6 +7,7 @@ import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
 import { IncomeCard } from "./Income";
 import { Overdraft } from "./Jars";
+import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
@@ -194,6 +195,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const [amt, setAmt] = useState("");
   const [type, setType] = useState<"" | "need" | "want">("");
   const nwOn = sel.need_want !== false;
+  const [full, setFull] = useState(false);
+  const simple = simpleOf(sel) && !full;
   const [cat, setCat] = useState("飲料點心");
   const [payJar, setPayJar] = useState("free");
   const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
@@ -266,7 +269,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
       </section>
 
       {mo.status === "active" && isCur && <Overdraft app={app} />}
-      {mo.status === "active" && isCur && (
+      {mo.status === "active" && isCur && simple && <QuickLog app={app} onDone={() => ex.reload()} onFull={() => setFull(true)} />}
+      {mo.status === "active" && isCur && !simple && (
         <section className="card">
           <div className="card-h"><span className="muted">自由罐還有</span><span className="small muted">本月可用 {fmt(mo.free_start)}</span></div>
           <div className="big-n" style={data.bal.free < 0 ? { color: "var(--warn)" } : undefined}>{data.bal.free < 0 ? `透支 ${fmt(-data.bal.free)}` : fmt(data.bal.free)}</div>
@@ -301,6 +305,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           )}
           <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
+          {simpleOf(sel) && <button className="link-note" onClick={() => setFull(false)}>切換回簡易記帳</button>}
         </section>
       )}
       <IncomeCard app={app} mo={mo} canAdd={mo.status === "active" && isCur} onChange={() => {}} />
