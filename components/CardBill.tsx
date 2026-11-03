@@ -14,11 +14,11 @@ const unknownCard = (e: any) => e.pay_method === "epay" && e.pay_detail === "App
  * Paying a credit-card bill: swipes already logged one by one were spent when they happened,
  * so only the part of the bill that was never logged is taken from the jar.
  */
-export function CardBill({ app, jar, history, onDone }: { app: App; jar: string; history: any[]; onDone: () => void }) {
+export function CardBill({ app, jar, history, onDone, initialBill }: { app: App; jar: string; history: any[]; onDone: () => void; initialBill?: number }) {
   const { sel, toast, data } = app;
   const [bank, setBank] = useState("");
   const [custom, setCustom] = useState("");
-  const [bill, setBill] = useState("");
+  const [bill, setBill] = useState(initialBill ? String(initialBill) : "");
   const [swipes, setSwipes] = useState<any[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [pay, setPay] = useState<Pay>({ m: "transfer", d: "" });

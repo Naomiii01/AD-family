@@ -10,6 +10,7 @@ import { Overdraft } from "./Jars";
 import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
+import { PendingCard } from "./Pending";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
 
@@ -270,6 +271,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
       </section>
 
       {mo.status === "active" && isCur && <Overdraft app={app} />}
+      {mo.status === "active" && isCur && <PendingCard key={ex.list.length} app={app} />}
       {mo.status === "active" && isCur && simple && <QuickLog app={app} onDone={() => ex.reload()} onFull={() => setFull(true)} />}
       {mo.status === "active" && isCur && !simple && (
         <section className="card">

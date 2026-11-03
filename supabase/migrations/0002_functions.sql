@@ -560,3 +560,11 @@ alter table public.families add column if not exists guardian text not null defa
 -- add_stock_trade(...): buy takes shares×price+fee from the jar, sell puts shares×price−fee−tax back (ledger kind 'stock',
 --   not an expense); can't sell more than held. void_stock_trade(p_id) reverses it (a sold buy can't be voided first).
 -- Adults show the long jar as 投資罐 (stock account); kids keep 長期罐.
+
+-- migration: pending_bank_moves
+-- pending_tx(member, dir out|in, amount, bank, note, status pending|done|ignored, result): bank transfers / deposits caught by the
+--   notify edge function, which can't tell where the money went or came from; RLS read via can_access.
+-- pending_rules(member, bank, dir → action, jar, category, item): last choice per bank and direction, used as the suggestion.
+-- pending_add(p_token, p_dir, p_amount, p_bank, p_note): service role only; same bank/direction/amount within 10 minutes is a duplicate.
+-- resolve_pending(p_id, p_action expense|income|card|stock|ignore, p_jar, p_item, p_category, p_remember):
+--   expense → add_expense_v3 (pay 轉帳, the bank); income → add_income into one jar; card/stock/ignore only close the item.

@@ -1,6 +1,7 @@
 "use client";
 import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal";
 import { QuickLog, simpleOf } from "./QuickLog";
+import { PendingCard } from "./Pending";
 import { StockCard, useStocks, holdingsOf, stockSummary } from "./Stocks";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
@@ -52,6 +53,7 @@ export default function Jars({ app }: { app: App }) {
         </div>
       ))}
       <Overdraft app={app} />
+      {cur?.status === "active" && <PendingCard app={app} />}
       {cur?.status === "active" && simpleOf(sel) && <QuickLog app={app} />}
       <div className="trio">
         <div className="jarcol">

@@ -308,3 +308,11 @@ ul.plain{margin:0;padding-left:1.1em;display:grid;gap:4px;font-size:.92rem}
 /* stock account */
 .stock-list .li{grid-template-columns:1fr auto auto}
 .stock-list .li .num{font-weight:700;line-height:1.35}
+/* 待確認: bank transfers and deposits from notifications */
+.pending{border:1.5px solid color-mix(in srgb,var(--accent) 45%,var(--line))}
+.pend-row{border-top:1px solid var(--line);padding:8px 0;display:grid;gap:8px}
+.pend-row:first-child{border-top:0}
+.pend-head{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.pend-head .d{color:var(--muted);font-size:.8rem}
+.pend-quick{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pend-quick .note{flex:1 1 100%}

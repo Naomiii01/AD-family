@@ -10,13 +10,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -545,6 +545,21 @@ const F: Record<string, (a: any) => any> = {
     t.voided = true;
     log(t.member_id, t.jar, t.side === "buy" ? Math.round(t.shares * t.price + t.fee) : -Math.round(t.shares * t.price - t.fee - t.tax),
       `刪除：${t.side === "buy" ? "買" : "賣"} ${t.symbol} ${t.shares} 股`, curMonth(), "stock");
+  },
+  resolve_pending: ({ p_id, p_action, p_jar, p_item, p_category, p_remember }) => {
+    const t = db.pending_tx.find((x) => x.id === p_id) || fail("找不到這筆通知");
+    needAccess(t.member_id);
+    if (t.status !== "pending") fail("這筆已經處理過了");
+    const item = String(p_item || "").trim().slice(0, 40);
+    let r: any = {};
+    if (p_action === "expense") r = F.add_expense_v3({ p_member: t.member_id, p_item: item || t.bank + "轉帳", p_amount: t.amount, p_type: "", p_category: p_category || "其他", p_jar: p_jar || "free", p_pay_method: "transfer", p_pay_detail: t.bank });
+    else if (p_action === "income") r = F.add_income({ p_member: t.member_id, p_source: item || t.bank + "入帳", p_category: p_category || "其他", p_amount: t.amount, p_split: { [p_jar || "free"]: t.amount } });
+    t.status = ["expense", "income", "card"].includes(p_action) ? "done" : "ignored";
+    if (p_remember !== false && t.bank) {
+      db.pending_rules = db.pending_rules.filter((x) => !(x.member_id === t.member_id && x.bank === t.bank && x.dir === t.dir));
+      db.pending_rules.push({ member_id: t.member_id, bank: t.bank, dir: t.dir, action: p_action, jar: p_jar || "", category: p_category || "", item });
+    }
+    return { ...r, action: p_action };
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };

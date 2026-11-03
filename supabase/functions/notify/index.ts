@@ -1,5 +1,5 @@
 // iOS 27 notification automation endpoint: POST {token, app?, title?, body?, text?}.
-// Reads the payment notification, records it, and always answers 200 with a readable message.
+// Reads the payment notification, records it (bank transfers and deposits wait in the app as 待確認), and always answers 200 with a readable message.
 // The notification text is only parsed here; it is not stored.
 import { admin, cors, json, readBody } from "../_shared/util.ts";
 import { parseNotification } from "../_shared/parse.ts";
@@ -19,6 +19,14 @@ Deno.serve(async (req) => {
   if (p.kind === "skip") return p.quiet
     ? json({ ok: false, skipped: true, notify: false, message: "" })
     : json({ ok: false, skipped: true, notify: true, message: `沒有自動記帳：${p.reason}。需要的話請手動記一筆。` });
+
+  if (p.kind === "pending") {
+    const q = await admin().rpc("pending_add", { p_token: token, p_dir: p.dir, p_amount: p.amount, p_bank: p.bank, p_note: p.note });
+    if (q.error) return json({ ok: false, notify: true, message: q.error.message });
+    if (q.data.dup) return json({ ok: true, dup: true, notify: false, message: "" });
+    return json({ ok: true, pending: true, notify: true,
+      message: `${p.bank}${p.dir === "in" ? "入帳" : "轉出"} ${p.amount} 元，打開 My零用錢 確認要怎麼記（待確認 ${q.data.count} 筆）` });
+  }
 
   const r = await admin().rpc("notify_add", {
     p_token: token, p_item: p.item, p_amount: p.amount, p_pay_method: p.payMethod, p_pay_detail: p.payDetail,
