@@ -14,6 +14,10 @@ Deno.serve(async (req) => {
   const title = String(b.title ?? "").slice(0, 300);
   const body = String(b.body ?? b.text ?? "").slice(0, 1000);
 
+  // The automation ran but the shortcut sent no text: the notification object wasn't turned into its title / body.
+  if (!title.trim() && !body.trim()) return json({ ok: false, notify: true,
+    message: "捷徑沒有收到通知的文字。請在「從通知記帳」把 body 改成通知的「內文」、title 改成「標題」。" });
+
   const p = parseNotification(app, title, body);
   // Quiet skips answer with an empty message so the shortcut shows nothing.
   if (p.kind === "skip") return p.quiet
