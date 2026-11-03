@@ -562,6 +562,12 @@ const F: Record<string, (a: any) => any> = {
     }
     return { ...r, action: p_action };
   },
+  mark_cost_unknown: ({ p_id }) => {
+    const t = db.stock_trades.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆交易");
+    needAccess(t.member_id);
+    if (t.jar !== "none" || t.side !== "buy") fail("只有「以前買的」持股可以標成本不明");
+    t.cost_known = false;
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });

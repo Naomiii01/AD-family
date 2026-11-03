@@ -572,3 +572,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: stock_preexisting_holdings
 -- add_stock_trade / void_stock_trade accept jar 'none' for a buy made before using the app: it adds shares and cost basis
 --   without touching any jar. A sell always returns money to a real jar.
+
+-- migration: stock_cost_unknown
+-- stock_trades.cost_known (default true). mark_cost_unknown(p_id): for a 'none'-jar buy whose cost couldn't be found;
+--   the app books it at the current price so its gain starts from 0, and shows 成本不明.

@@ -4,9 +4,9 @@ import type { App } from "./Shell";
 import { supabase, rpc, fn } from "@/lib/supabase";
 import { fmt, num, jarList } from "@/lib/util";
 
-type Trade = { id: string; traded_on: string; symbol: string; name: string; side: "buy" | "sell"; shares: number; price: number; fee: number; tax: number; jar: string; created_at: string };
+type Trade = { id: string; traded_on: string; symbol: string; name: string; side: "buy" | "sell"; shares: number; price: number; fee: number; tax: number; jar: string; created_at: string; cost_known?: boolean };
 type Price = { symbol: string; name: string; price: number | null; price_date: string | null; updated_at: string };
-export type Holding = { symbol: string; name: string; shares: number; cost: number; avg: number; realized: number; price: number | null; value: number | null };
+export type Holding = { symbol: string; name: string; shares: number; cost: number; avg: number; realized: number; price: number | null; value: number | null; costUnknown?: boolean };
 
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 /** 手續費 0.1425%：整張最低 20 元，零股最低 1 元（各家券商折扣不同，可以自己改）。 */
@@ -24,6 +24,7 @@ export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { li
     if (t.side === "buy") {
       h.cost += t.shares * Number(t.price) + t.fee;
       h.shares += t.shares;
+      if (t.cost_known === false) h.costUnknown = true;
     } else {
       const avg = h.shares ? h.cost / h.shares : 0;
       const gain = t.shares * Number(t.price) - t.fee - t.tax - avg * t.shares;
@@ -51,7 +52,7 @@ export function useStocks(memberId: string, bump?: unknown) {
     setPrices(Object.fromEntries(((data as Price[]) || []).map((p) => [p.symbol, p])));
   }, []);
   const load = useCallback(async () => {
-    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at")
+    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known")
       .eq("member_id", memberId).eq("voided", false).order("traded_on", { ascending: true });
     setTrades((data as Trade[]) || []);
     await loadPrices();
@@ -138,7 +139,7 @@ export function StockCard({ app }: { app: App }) {
               return (
                 <div className="li" key={x.symbol}>
                   <span className="t"><b>{x.name || x.symbol}</b> <span className="note">{x.symbol}</span><br />
-                    <span className="d">{num(x.shares)} 股 · 均價 {x.avg.toFixed(2)}{x.price != null ? ` · 現價 ${x.price}` : " · 還沒有股價"}</span></span>
+                    <span className="d">{num(x.shares)} 股 · {x.costUnknown ? `成本不明（以 ${x.avg.toFixed(2)} 計）` : `均價 ${x.avg.toFixed(2)}`}{x.price != null ? ` · 現價 ${x.price}` : " · 還沒有股價"}</span></span>
                   <span />
                   <span className="num" style={{ textAlign: "right" }}>{fmt(x.value ?? x.cost)}<br />
                     {g != null && <span className="small" style={{ color: gainColor(g) }}>{signed(g)}（{pctTxt(x.cost ? (g / x.cost) * 100 : 0)}）</span>}</span>
@@ -210,6 +211,7 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
   const total = side === "buy" ? Math.round(n * p + f) : Math.round(n * p - f - t);
   const held = holdings.find((x) => x.symbol === S);
   const jars = side === "buy" ? [...real, { key: "none", name: "以前買的", core: false }] : real;
+  const old = side === "buy" && jar === "none";
   const notHeld = side === "sell" && /^[0-9A-Z]{2,8}$/.test(S) && !(held && held.shares > 0);
   function asOld() { setSide("buy"); setJar("none"); setShares(""); setPrice(""); setFee(null); setTax(null); }
   const bal = (k: string) => (k === "free" ? data.bal.free : k === "long" ? data.bal.long : data.bal.extras?.[k] || 0);
@@ -230,12 +232,22 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
 
   async function save() {
     setBusy(true);
+    // An old holding without a known cost is booked at today's price, so its gain starts from 0.
+    let px = p, unknown = false;
+    if (old && !(p > 0)) {
+      await st.refresh([S]);
+      const { data: row } = await supabase.from("stock_prices").select("price").eq("symbol", S).maybeSingle();
+      px = Number(row?.price) || 0;
+      unknown = true;
+      if (!(px > 0)) { setBusy(false); return toast(`查不到 ${S} 的現價，請填成本價`); }
+    }
     const [r, e] = await rpc<any>("add_stock_trade", {
-      p_member: sel.id, p_date: date, p_symbol: S, p_name: name, p_side: side, p_shares: n, p_price: p, p_fee: f, p_tax: t, p_jar: jar,
+      p_member: sel.id, p_date: date, p_symbol: S, p_name: name, p_side: side, p_shares: n, p_price: px, p_fee: unknown ? 0 : f, p_tax: t, p_jar: jar,
     });
+    if (!e && unknown) await rpc("mark_cost_unknown", { p_id: r.id });
     setBusy(false);
     if (e) return toast(e);
-    toast(jar === "none" ? `記好了：${name || S} ${num(n)} 股加進持股，沒有從罐子扣錢`
+    toast(old ? `記好了：${name || S} ${num(n)} 股加進持股${unknown ? `，成本先用現價 ${px} 計算` : ""}，沒有從罐子扣錢`
       : side === "buy"
       ? `記好了：從${r.jar_name}付 ${fmt(-r.amount)}${r.left < 0 ? `，${r.jar_name}透支 ${fmt(-r.left)}` : ""}`
       : `記好了：${fmt(r.amount)} 放回${r.jar_name}`);
@@ -260,12 +272,12 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
       <div className="grid2">
         <label className="f">股票代號<input id="st-sym" maxLength={8} autoCapitalize="characters" placeholder="例如 0050" value={sym}
           onChange={(e) => { setSym(e.target.value); setName(""); }} onBlur={lookup} /></label>
-        <label className="f">成交日<input id="st-date" type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label className="f">{old ? "買進日（不確定可以不改）" : "成交日"}<input id="st-date" type="date" max={today()} value={date} onChange={(e) => setDate(e.target.value)} /></label>
       </div>
       {(name || looking) && <p className="small" style={{ margin: 0 }}>{looking && !name ? "查詢中…" : <>{name}{held && held.shares > 0 ? <span className="note">　目前有 {num(held.shares)} 股，均價 {held.avg.toFixed(2)}</span> : null}</>}</p>}
       <div className="grid2">
         <label className="f">股數<input id="st-shares" type="number" inputMode="numeric" min={1} placeholder="1 張 = 1000 股" value={shares} onChange={(e) => setShares(e.target.value)} /></label>
-        <label className="f">成交價<input id="st-price" type="number" inputMode="decimal" min={0} step="0.01" placeholder="每股價格" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
+        <label className="f">{old ? "成本價（查不到可以不填）" : "成交價"}<input id="st-price" type="number" inputMode="decimal" min={0} step="0.01" placeholder={old ? "不填就用現價" : "每股價格"} value={price} onChange={(e) => setPrice(e.target.value)} /></label>
       </div>
       <div className="grid2">
         <label className="f">手續費<input id="st-fee" type="number" inputMode="numeric" min={0} value={fee ?? String(autoFee)} onChange={(e) => setFee(e.target.value)} /></label>
@@ -283,12 +295,12 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
         {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => setJar(j.key)}>{j.name}</button>)}
       </div>
       {n > 0 && p > 0 && (
-        <div className="kv"><span>{side === "buy" ? "一共付出" : "實際拿回"}</span><b className="num">{fmt(total)}</b></div>
+        <div className="kv"><span>{old ? "持股成本" : side === "buy" ? "一共付出" : "實際拿回"}</span><b className="num">{fmt(total)}</b></div>
       )}
-      {jar === "none" && side === "buy" && <p className="note">「以前買的」只把股票加進持股、用來算成本和賺賠，不會從任何罐子扣錢。成交日和價格請填當初買進時的；分好幾次買的，可以分次記，或填平均價。</p>}
+      {jar === "none" && side === "buy" && <p className="note">「以前買的」只把股票加進持股，不會從任何罐子扣錢。查得到成本價就填（分好幾次買的可以填平均價），賺賠才算得準；查不到就空著，App 會先用現在的股價當成本，之後的漲跌從今天開始算。</p>}
       {side === "buy" && jar !== "none" && n > 0 && p > 0 && total > bal(jar) && <p className="note" style={{ color: "var(--warn)" }}>這個罐子只有 {fmt(bal(jar))}，記下去會透支 {fmt(total - bal(jar))}。</p>}
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn primary" disabled={busy || !S || n <= 0 || p <= 0 || (side === "sell" && (!held || n > held.shares))} onClick={save}>記下來</button>
+        <button className="btn primary" disabled={busy || !S || n <= 0 || (p <= 0 && !old) || (side === "sell" && (!held || n > held.shares))} onClick={save}>記下來</button>
         <button className="btn" onClick={onClose}>取消</button>
       </div>
       {side === "sell" && held && n > held.shares && <p className="note" style={{ color: "var(--warn)" }}>你只有 {num(held.shares)} 股。</p>}
