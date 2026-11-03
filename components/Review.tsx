@@ -126,7 +126,7 @@ export default function Review({ app }: { app: App }) {
           <>
             <p className="small muted">剩下的錢要怎麼處理？</p>
             <div className="seg" role="group" aria-label="結餘去向">
-              {[["keep", "留在自由罐"], ["dream", "轉進夢想罐"], ["long", "轉進長期罐"]].map(([k, t]) => (
+              {[["keep", "留在自由罐"], ["dream", "轉進夢想罐"], ["long", `轉進${jarName(sel, "long")}`]].map(([k, t]) => (
                 <button key={k} className={rv.to === k ? "on" : ""} onClick={() => setTo(k)}>{t}</button>
               ))}
             </div>
@@ -156,7 +156,7 @@ export default function Review({ app }: { app: App }) {
         </section>
       )}
       <section className="card"><BorrowStat app={app} always /></section>
-      {mk === curMonth() && <LongValueCard app={app} />}
+      {mk === curMonth() && sel.role === "kid" && <LongValueCard app={app} />}
       <section className="card">
         <h3>三個問題</h3>
         {([["best", "這個月最滿意的一筆花費？"], ["regret", "有沒有買了有點後悔的？"], ["next", "下個月想怎麼調整？"]] as const).map(([k, q]) => (

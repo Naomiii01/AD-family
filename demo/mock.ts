@@ -10,13 +10,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -497,6 +497,55 @@ const F: Record<string, (a: any) => any> = {
     log(e.member_id, jar, -e.amount, e.item, e.month, "expense");
     e.jar = jar;
   },
+  pay_card_bill: ({ p_member, p_bank, p_bill, p_ids, p_jar, p_pay_method, p_pay_detail }) => {
+    needAccess(p_member);
+    const bank = String(p_bank || "").trim().slice(0, 12);
+    if (!bank) fail("請選是哪一張卡");
+    if (!(p_bill > 0)) fail("請輸入帳單金額");
+    const ids: string[] = p_ids || [];
+    const rows = db.expenses.filter((e) => ids.includes(e.id) && e.member_id === p_member && !e.voided && !e.card_paid);
+    if (rows.length !== ids.length) fail("有幾筆刷卡找不到或已經繳過，請重新整理");
+    const logged = rows.reduce((s, e) => s + e.amount, 0);
+    if (logged > p_bill) fail(`勾選的刷卡（${logged}）比帳單金額（${p_bill}）多，請檢查有沒有勾到下一期的`);
+    const rest = p_bill - logged;
+    let r: any = null;
+    if (rest > 0) r = F.add_expense_v3({ p_member, p_item: `${bank}卡費（帳單 ${p_bill}）`, p_amount: rest, p_type: "need", p_category: "卡費", p_jar: p_jar || "fixed", p_pay_method, p_pay_detail });
+    else if (!db.months.some((m) => m.member_id === p_member && m.month === curMonth() && m.status === "active")) fail("這個月還沒做月初規劃");
+    rows.forEach((e) => (e.card_paid = true));
+    return { bill: p_bill, logged, charged: rest, left: r?.left ?? null, jar_name: r?.jar_name ?? null };
+  },
+  add_stock_trade: ({ p_member, p_date, p_symbol, p_name, p_side, p_shares, p_price, p_fee, p_tax, p_jar }) => {
+    needAccess(p_member);
+    const sym = String(p_symbol || "").trim().toUpperCase();
+    const jar = p_jar || "long";
+    if (!/^[0-9A-Z]{2,8}$/.test(sym)) fail("股票代號不正確");
+    if (!(p_shares > 0)) fail("請輸入股數");
+    if (!(p_price > 0)) fail("請輸入成交價");
+    if (!p_date || p_date > todayTW()) fail("成交日不能是未來");
+    if (jar === "dream") fail("夢想罐的錢不能拿來買股票");
+    if (!jarKeys(p_member).includes(jar)) fail("沒有這個罐子");
+    if (!db.months.some((m) => m.member_id === p_member && m.month === curMonth() && m.status === "active")) fail("這個月還沒做月初規劃，先到「本月」把錢放進罐子");
+    const held = db.stock_trades.filter((t) => t.member_id === p_member && t.symbol === sym && !t.voided).reduce((s, t) => s + (t.side === "buy" ? t.shares : -t.shares), 0);
+    if (p_side === "sell" && p_shares > held) fail(`你的 ${sym} 只有 ${held} 股，不能賣 ${p_shares} 股`);
+    const name = String(p_name || "").trim().slice(0, 20) || db.stock_prices.find((p) => p.symbol === sym)?.name || "";
+    const amt = p_side === "buy" ? -Math.round(p_shares * p_price + (p_fee || 0)) : Math.round(p_shares * p_price - (p_fee || 0) - (p_tax || 0));
+    const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, traded_on: p_date, symbol: sym, name, side: p_side, shares: p_shares, price: p_price,
+      fee: p_fee || 0, tax: p_tax || 0, jar, voided: false, created_at: now() };
+    db.stock_trades.push(row);
+    log(p_member, jar, amt, `${p_side === "buy" ? "買股票" : "賣股票"} ${sym}${name ? " " + name : ""} ${p_shares} 股`, curMonth(), "stock");
+    return { id: row.id, amount: amt, left: bal(p_member, jar), jar_name: jarNm(p_member, jar) };
+  },
+  void_stock_trade: ({ p_id }) => {
+    const t = db.stock_trades.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆交易");
+    needAccess(t.member_id);
+    if (t.side === "buy") {
+      const held = db.stock_trades.filter((x) => x.member_id === t.member_id && x.symbol === t.symbol && !x.voided).reduce((s, x) => s + (x.side === "buy" ? x.shares : -x.shares), 0);
+      if (held - t.shares < 0) fail("這筆買進的股票已經賣掉了，要先刪除後面的賣出");
+    }
+    t.voided = true;
+    log(t.member_id, t.jar, t.side === "buy" ? Math.round(t.shares * t.price + t.fee) : -Math.round(t.shares * t.price - t.fee - t.tax),
+      `刪除：${t.side === "buy" ? "買" : "賣"} ${t.symbol} ${t.shares} 股`, curMonth(), "stock");
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
@@ -532,7 +581,7 @@ function activeGoal(mid: string) {
 }
 const extraKeys = (mid: string): string[] => (mem(mid).extra_jars || []).map((j: Row) => j.key);
 const jarKeys = (mid: string) => ["free", "dream", "long", ...extraKeys(mid)];
-const jarNm = (mid: string, k: string) => ({ free: "自由罐", dream: "夢想罐", long: "長期罐" } as Row)[k] || (mem(mid).extra_jars || []).find((j: Row) => j.key === k)?.name || k;
+const jarNm = (mid: string, k: string) => ({ free: "自由罐", dream: "夢想罐", long: mem(mid).role === "kid" ? "長期罐" : "投資罐" } as Row)[k] || (mem(mid).extra_jars || []).find((j: Row) => j.key === k)?.name || k;
 function normPay(v: any): string {
   const t = String(v ?? "").trim().toLowerCase();
   const m = ({ "": "", cash: "cash", "現金": "cash", card: "card", "信用卡": "card", epay: "epay", "電子支付": "epay", transfer: "transfer", "轉帳": "transfer", "扣款": "transfer", "自動扣款": "transfer" } as Row)[t];
@@ -562,6 +611,7 @@ function visible(table: string, r: Row) {
   if (!db.uid) return false;
   if (table === "families") return r.id === myFam();
   if (table === "members") return r.user_id === db.uid || (r.family_id === myFam() && amParent());
+  if (table === "stock_prices") return true;
   return canAccess(r.member_id);
 }
 class Query {
@@ -614,6 +664,7 @@ export const supabase = {
   functions: {
     invoke: async (name: string, { body }: any) => {
       await wait();
+      if (name === "stock-price") return { data: { ok: false, error: "體驗版沒有即時股價，先用成本計算" }, error: null };
       if (name !== "members") return { data: { ok: false, error: "體驗版不支援" }, error: null };
       try {
         if (!amParent()) fail("只有家長可以新增成員");

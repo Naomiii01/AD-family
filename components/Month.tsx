@@ -9,6 +9,7 @@ import { IncomeCard } from "./Income";
 import { Overdraft } from "./Jars";
 import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
+import { CardBill } from "./CardBill";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
 
@@ -106,7 +107,7 @@ function Plan({ app }: { app: App }) {
   }
 
   const hint = (k: string) =>
-    k === "free" ? "剩下的錢自動放這裡" : k === "dream" ? "為夢想存" : k === "long" ? (isKid ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "只進不出，定期投資")
+    k === "free" ? "剩下的錢自動放這裡" : k === "dream" ? "為夢想存" : k === "long" ? (isKid ? `每月至少 ${fmt(app.family.long_min)}，定期買股票` : "準備買股票的錢，每月可以不一樣，填 0 也可以")
       : k === "fixed" ? "房租、保險、電話費" : k === "reserve" ? "突發狀況用" : "";
   const row = (k: string) => (
     <div className="arow" key={k}>
@@ -286,12 +287,16 @@ function Active({ app, mo }: { app: App; mo: any }) {
               {payJars.map((j) => <button key={j.key} className={payJar === j.key ? "on" : ""} onClick={() => pickJar(j.key)}>{j.name}</button>)}
             </div>
           )}
+          <div className="chips" role="group" aria-label="類別">
+            {catsFor(payJar).map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
+          </div>
+          {payJar === "fixed" && cat === "卡費" ? (
+            <CardBill app={app} jar={payJar} history={ex.list} onDone={() => ex.reload()} />
+          ) : (
+            <>
           <div className="grid2">
             <label className="f">買了什麼<input id="e-item" maxLength={40} placeholder={payJar === "fixed" ? "例如：10月房租" : "例如：手搖飲"} value={item} onChange={(e) => setItem(e.target.value)} /></label>
             <label className="f">多少錢<input id="e-amt" type="number" inputMode="numeric" min={1} placeholder="60" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
-          </div>
-          <div className="chips" role="group" aria-label="類別">
-            {catsFor(payJar).map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
           </div>
           <div className="small muted">怎麼付的</div>
           <PayPicker mid={sel.id} value={pay} onChange={setPay} history={ex.list} />
@@ -305,6 +310,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
             </div>
           )}
           <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
+            </>
+          )}
           {simpleOf(sel) && <button className="link-note" onClick={() => setFull(false)}>切換回簡易記帳</button>}
         </section>
       )}

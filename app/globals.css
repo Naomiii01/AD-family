@@ -297,3 +297,14 @@ ul.plain{margin:0;padding-left:1.1em;display:grid;gap:4px;font-size:.92rem}
 .ql-cats button .ic{font-size:1.6rem;line-height:1}
 .ql-cats button.on{border-color:var(--ink);background:color-mix(in srgb,var(--free) 22%,var(--surface));font-weight:700}
 .ql-again .chips{margin-top:4px}
+/* card bill: tick the swipes already logged */
+.card-bill{display:grid;gap:10px}
+.cb-list{display:grid;border:1px solid var(--line);border-radius:12px;padding:2px 10px}
+.cb-row{display:grid;grid-template-columns:auto auto 1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem;cursor:pointer}
+.cb-row:first-child{border-top:0}
+.cb-row input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.cb-row .d{color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+.cb-row .t{min-width:0;overflow-wrap:anywhere}
+/* stock account */
+.stock-list .li{grid-template-columns:1fr auto auto}
+.stock-list .li .num{font-weight:700;line-height:1.35}

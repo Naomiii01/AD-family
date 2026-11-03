@@ -100,12 +100,14 @@ export type JarDef = { key: string; name: string; core: boolean; target?: number
 /** The member's jars in display order: the three core jars, then any extra jars. */
 export function jarList(m: any): JarDef[] {
   return [
-    ...CORE_JARS.map((k) => ({ key: k, name: JN[k], core: true })),
+    ...CORE_JARS.map((k) => ({ key: k, name: coreName(m, k), core: true })),
     ...((m?.extra_jars || []) as any[]).map((j) => ({ key: j.key, name: j.name, core: false, target: j.target || 0 })),
   ];
 }
+/** Adults use the long jar as their investing jar (stock account); kids keep 長期罐. */
+const coreName = (m: any, k: string) => (k === "long" && m?.role && m.role !== "kid" ? "投資罐" : JN[k]);
 export function jarName(m: any, key: string) {
-  return JN[key] && key !== "keep" ? JN[key] : (m?.extra_jars || []).find((j: any) => j.key === key)?.name || key;
+  return JN[key] && key !== "keep" ? coreName(m, key) : (m?.extra_jars || []).find((j: any) => j.key === key)?.name || key;
 }
 /** Jars money can be spent from directly (not dream, not long). */
 export const spendable = (m: any) => jarList(m).filter((j) => j.key !== "dream" && j.key !== "long");

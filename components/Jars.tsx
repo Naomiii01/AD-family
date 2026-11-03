@@ -1,6 +1,7 @@
 "use client";
 import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal";
 import { QuickLog, simpleOf } from "./QuickLog";
+import { StockCard, useStocks, holdingsOf, stockSummary } from "./Stocks";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, supabase } from "@/lib/supabase";
@@ -65,17 +66,19 @@ export default function Jars({ app }: { app: App }) {
           <div className="ja">{fmt(b.dream)}</div>
           <div className="js">{g ? `${Math.min(100, Math.round((b.dream / g.price) * 100))}% · ${g.name}` : "還沒設定夢想"}</div>
         </div>
-        <div className="jarcol">
-          <JarSVG kind="long" pct={b.long / ms} />
-          <div className="jn k-long">長期罐</div>
-          <div className="ja">{fmt(b.long)}</div>
-          <div className="js">只進不出<br />下個目標 {fmt(ms)}</div>
-        </div>
+        {sel.role === "kid" ? (
+          <div className="jarcol">
+            <JarSVG kind="long" pct={b.long / ms} />
+            <div className="jn k-long">長期罐</div>
+            <div className="ja">{fmt(b.long)}</div>
+            <div className="js">只進不出<br />下個目標 {fmt(ms)}</div>
+          </div>
+        ) : <InvestCol app={app} />}
       </div>
       <ExtraJars app={app} />
       <Stars months={data.months} />
       <DreamCard app={app} />
-      <LongCard app={app} />
+      {sel.role === "kid" ? <LongCard app={app} /> : <StockCard app={app} />}
       <MoveMoney app={app} />
       {data.recent.length > 0 && (
         <section className="card">
@@ -97,6 +100,22 @@ export default function Jars({ app }: { app: App }) {
         {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}
       </p>
     </>
+  );
+}
+
+/** Adults: the long jar is the investing jar — cash waiting to invest, plus the stocks it bought. */
+function InvestCol({ app }: { app: App }) {
+  const { data, sel } = app;
+  const st = useStocks(sel.id, data.recent?.[0]?.created_at);
+  const s = stockSummary(holdingsOf(st.trades, st.prices));
+  const total = data.bal.long + s.value;
+  return (
+    <div className="jarcol">
+      <JarSVG kind="long" pct={total > 0 ? Math.min(1, s.value / Math.max(total, 1)) * 0.8 + 0.1 : 0} />
+      <div className="jn k-long">投資罐</div>
+      <div className="ja">{fmt(s.value)}</div>
+      <div className="js">股票市值{s.cost > 0 ? <><br /><span style={{ color: s.gain >= 0 ? "var(--long)" : "var(--warn)" }}>{s.gain >= 0 ? "+" : "−"}{fmt(Math.abs(s.gain))}</span></> : null}{data.bal.long ? <><br />現金 {fmt(data.bal.long)}</> : null}</div>
+    </div>
   );
 }
 
@@ -413,7 +432,7 @@ function MoveMoney({ app }: { app: App }) {
       <div><button className="btn primary" disabled={busy || !(+amt > 0)} onClick={go}>移過去</button></div>
       <p className="note">{sel.role === "kid"
         ? `長期罐的錢只進不出。夢想罐的錢要移出來需要${gd(app.family)}同意（由${gd(app.family)}操作），移出後夢想加碼關卡從 0 開始。`
-        : "長期罐的錢只進不出。從夢想罐移出的錢會記成「挪用」，月底檢討看得到。"}</p>
+        : "投資罐的錢只能拿去買股票，賣股票的錢可以放回任何罐子。從夢想罐移出的錢會記成「挪用」，月底檢討看得到。"}</p>
     </section>
   );
 }

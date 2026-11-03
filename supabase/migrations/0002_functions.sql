@@ -550,3 +550,13 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: simple_log_mode
 -- members.simple_log boolean (null = default by role: kids simple, adults full); column SELECT granted to authenticated;
 -- set_simple_log(p_member, p_on).
+
+-- migration: card_bill_and_stocks
+-- expenses.card_paid: a card swipe already logged one by one and covered by a paid bill.
+-- pay_card_bill(p_member, p_bank, p_bill, p_ids, p_jar, p_pay_method, p_pay_detail): marks the ticked swipes paid and
+--   spends only bill − ticked from the jar (default fixed); nothing is spent when every swipe was already logged.
+-- stock_trades(member, traded_on, symbol, name, side buy|sell, shares, price, fee, tax, jar, voided); RLS read via can_access.
+-- stock_prices(symbol, name, price, price_date) cache, readable by any signed-in user, written by the stock-price edge function.
+-- add_stock_trade(...): buy takes shares×price+fee from the jar, sell puts shares×price−fee−tax back (ledger kind 'stock',
+--   not an expense); can't sell more than held. void_stock_trade(p_id) reverses it (a sold buy can't be voided first).
+-- Adults show the long jar as 投資罐 (stock account); kids keep 長期罐.
