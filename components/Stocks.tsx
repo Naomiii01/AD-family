@@ -163,7 +163,7 @@ export function StockCard({ app }: { app: App }) {
               <div className="li" key={t.id}>
                 <span className="d">{+t.traded_on.slice(5, 7)}/{+t.traded_on.slice(8)}</span>
                 <span className="t"><span className={`tag ${t.side === "buy" ? "need" : "want"}`}>{t.side === "buy" ? "買" : "賣"}</span> {t.name || t.symbol} {num(t.shares)} 股 @ {Number(t.price)}
-                  <br /><span className="note">{t.side === "buy" ? "付出" : "拿回"} {fmt(t.side === "buy" ? t.shares * t.price + t.fee : t.shares * t.price - t.fee - t.tax)} · {jarList(sel).find((j) => j.key === t.jar)?.name || t.jar}</span></span>
+                  <br /><span className="note">{t.side === "buy" ? "付出" : "拿回"} {fmt(t.side === "buy" ? t.shares * t.price + t.fee : t.shares * t.price - t.fee - t.tax)} · {t.jar === "none" ? "以前買的，沒扣罐子" : jarList(sel).find((j) => j.key === t.jar)?.name || t.jar}</span></span>
                 <span />
                 <button className="x" onClick={() => setDel(t)} aria-label={`刪除 ${t.symbol} 這筆交易`}>×</button>
               </div>
@@ -187,7 +187,7 @@ export function StockCard({ app }: { app: App }) {
 
 function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<typeof useStocks>; holdings: Holding[]; onClose: () => void }) {
   const { sel, toast, data } = app;
-  const jars = jarList(sel).filter((j) => j.key !== "dream");
+  const real = jarList(sel).filter((j) => j.key !== "dream");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [date, setDate] = useState(today());
   const [sym, setSym] = useState("");
@@ -209,6 +209,9 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
   const t = side === "sell" ? (tax === null ? autoTax : Math.max(0, Math.round(+tax) || 0)) : 0;
   const total = side === "buy" ? Math.round(n * p + f) : Math.round(n * p - f - t);
   const held = holdings.find((x) => x.symbol === S);
+  const jars = side === "buy" ? [...real, { key: "none", name: "以前買的", core: false }] : real;
+  const notHeld = side === "sell" && /^[0-9A-Z]{2,8}$/.test(S) && !(held && held.shares > 0);
+  function asOld() { setSide("buy"); setJar("none"); setShares(""); setPrice(""); setFee(null); setTax(null); }
   const bal = (k: string) => (k === "free" ? data.bal.free : k === "long" ? data.bal.long : data.bal.extras?.[k] || 0);
 
   async function lookup() {
@@ -232,7 +235,8 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
     });
     setBusy(false);
     if (e) return toast(e);
-    toast(side === "buy"
+    toast(jar === "none" ? `記好了：${name || S} ${num(n)} 股加進持股，沒有從罐子扣錢`
+      : side === "buy"
       ? `記好了：從${r.jar_name}付 ${fmt(-r.amount)}${r.left < 0 ? `，${r.jar_name}透支 ${fmt(-r.left)}` : ""}`
       : `記好了：${fmt(r.amount)} 放回${r.jar_name}`);
     await Promise.all([st.reload(), data.reload()]);
@@ -243,7 +247,7 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
     <div className="income-form">
       <div className="seg" role="group" aria-label="買進或賣出">
         <button className={side === "buy" ? "on" : ""} onClick={() => setSide("buy")}>買進</button>
-        <button className={side === "sell" ? "on" : ""} onClick={() => setSide("sell")} disabled={!holdings.some((x) => x.shares > 0)}>賣出</button>
+        <button className={side === "sell" ? "on" : ""} onClick={() => { setSide("sell"); if (jar === "none") setJar(data.bal.long > 0 ? "long" : "free"); }}>賣出</button>
       </div>
       {side === "sell" && (
         <div className="chips" role="group" aria-label="賣哪一支">
@@ -268,6 +272,12 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
         {side === "sell" && <label className="f">證交稅<input id="st-tax" type="number" inputMode="numeric" min={0} value={tax ?? String(autoTax)} onChange={(e) => setTax(e.target.value)} /></label>}
       </div>
       <p className="note">手續費預設 0.1425%，有券商折扣的話照對帳單改。{side === "sell" ? "證交稅：股票 0.3%、ETF 0.1%。" : ""}</p>
+      {notHeld && (
+        <div className="banner warn">
+          <span>App 裡還沒有 {name || S} 的持股，所以不能記賣出。如果是開始用 App 之前就買的，先補記一筆「以前買的持股」（填當初的買進價，賺賠才算得準），再回來記賣出。</span>
+          <div><button className="btn sm primary" onClick={asOld}>補記以前買的 {name || S}</button></div>
+        </div>
+      )}
       <div className="small muted">{side === "buy" ? "錢從哪個罐子出" : "賣掉的錢放回哪個罐子"}</div>
       <div className="seg" role="group" aria-label="哪個罐子">
         {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => setJar(j.key)}>{j.name}</button>)}
@@ -275,7 +285,8 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
       {n > 0 && p > 0 && (
         <div className="kv"><span>{side === "buy" ? "一共付出" : "實際拿回"}</span><b className="num">{fmt(total)}</b></div>
       )}
-      {side === "buy" && n > 0 && p > 0 && total > bal(jar) && <p className="note" style={{ color: "var(--warn)" }}>這個罐子只有 {fmt(bal(jar))}，記下去會透支 {fmt(total - bal(jar))}。</p>}
+      {jar === "none" && side === "buy" && <p className="note">「以前買的」只把股票加進持股、用來算成本和賺賠，不會從任何罐子扣錢。成交日和價格請填當初買進時的；分好幾次買的，可以分次記，或填平均價。</p>}
+      {side === "buy" && jar !== "none" && n > 0 && p > 0 && total > bal(jar) && <p className="note" style={{ color: "var(--warn)" }}>這個罐子只有 {fmt(bal(jar))}，記下去會透支 {fmt(total - bal(jar))}。</p>}
       <div className="row" style={{ gap: 8 }}>
         <button className="btn primary" disabled={busy || !S || n <= 0 || p <= 0 || (side === "sell" && (!held || n > held.shares))} onClick={save}>記下來</button>
         <button className="btn" onClick={onClose}>取消</button>

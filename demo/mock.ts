@@ -523,7 +523,8 @@ const F: Record<string, (a: any) => any> = {
     if (!(p_price > 0)) fail("請輸入成交價");
     if (!p_date || p_date > todayTW()) fail("成交日不能是未來");
     if (jar === "dream") fail("夢想罐的錢不能拿來買股票");
-    if (!jarKeys(p_member).includes(jar)) fail("沒有這個罐子");
+    if (jar === "none" && p_side === "sell") fail("賣掉的錢要放回一個罐子");
+    if (jar !== "none" && !jarKeys(p_member).includes(jar)) fail("沒有這個罐子");
     if (!db.months.some((m) => m.member_id === p_member && m.month === curMonth() && m.status === "active")) fail("這個月還沒做月初規劃，先到「本月」把錢放進罐子");
     const held = db.stock_trades.filter((t) => t.member_id === p_member && t.symbol === sym && !t.voided).reduce((s, t) => s + (t.side === "buy" ? t.shares : -t.shares), 0);
     if (p_side === "sell" && p_shares > held) fail(`你的 ${sym} 只有 ${held} 股，不能賣 ${p_shares} 股`);
@@ -532,7 +533,7 @@ const F: Record<string, (a: any) => any> = {
     const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, traded_on: p_date, symbol: sym, name, side: p_side, shares: p_shares, price: p_price,
       fee: p_fee || 0, tax: p_tax || 0, jar, voided: false, created_at: now() };
     db.stock_trades.push(row);
-    log(p_member, jar, amt, `${p_side === "buy" ? "買股票" : "賣股票"} ${sym}${name ? " " + name : ""} ${p_shares} 股`, curMonth(), "stock");
+    if (jar !== "none") log(p_member, jar, amt, `${p_side === "buy" ? "買股票" : "賣股票"} ${sym}${name ? " " + name : ""} ${p_shares} 股`, curMonth(), "stock");
     return { id: row.id, amount: amt, left: bal(p_member, jar), jar_name: jarNm(p_member, jar) };
   },
   void_stock_trade: ({ p_id }) => {
@@ -543,7 +544,7 @@ const F: Record<string, (a: any) => any> = {
       if (held - t.shares < 0) fail("這筆買進的股票已經賣掉了，要先刪除後面的賣出");
     }
     t.voided = true;
-    log(t.member_id, t.jar, t.side === "buy" ? Math.round(t.shares * t.price + t.fee) : -Math.round(t.shares * t.price - t.fee - t.tax),
+    if (t.jar !== "none") log(t.member_id, t.jar, t.side === "buy" ? Math.round(t.shares * t.price + t.fee) : -Math.round(t.shares * t.price - t.fee - t.tax),
       `刪除：${t.side === "buy" ? "買" : "賣"} ${t.symbol} ${t.shares} 股`, curMonth(), "stock");
   },
   resolve_pending: ({ p_id, p_action, p_jar, p_item, p_category, p_remember }) => {

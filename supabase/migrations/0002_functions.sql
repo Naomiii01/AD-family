@@ -568,3 +568,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- pending_add(p_token, p_dir, p_amount, p_bank, p_note): service role only; same bank/direction/amount within 10 minutes is a duplicate.
 -- resolve_pending(p_id, p_action expense|income|card|stock|ignore, p_jar, p_item, p_category, p_remember):
 --   expense → add_expense_v3 (pay 轉帳, the bank); income → add_income into one jar; card/stock/ignore only close the item.
+
+-- migration: stock_preexisting_holdings
+-- add_stock_trade / void_stock_trade accept jar 'none' for a buy made before using the app: it adds shares and cost basis
+--   without touching any jar. A sell always returns money to a real jar.
