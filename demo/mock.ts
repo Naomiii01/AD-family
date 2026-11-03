@@ -10,13 +10,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; events: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], events: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -567,6 +567,43 @@ const F: Record<string, (a: any) => any> = {
     needAccess(t.member_id);
     if (t.jar !== "none" || t.side !== "buy") fail("只有「以前買的」持股可以標成本不明");
     t.cost_known = false;
+  },
+  save_event: ({ p_id, p_member, p_day, p_time, p_title, p_note, p_amount, p_dir, p_repeat }) => {
+    needAccess(p_member);
+    const title = String(p_title || "").trim().slice(0, 40);
+    if (!title) fail("請寫下行程名稱");
+    if (!p_day) fail("請選日期");
+    if (p_dir && !(p_amount > 0)) fail("預定的帳務要填金額");
+    const v = { day: p_day, time: p_time || "", title, note: String(p_note || "").slice(0, 200), amount: p_dir ? p_amount : null, dir: p_dir || "", repeat: p_repeat || "none" };
+    if (p_id) {
+      const e = db.events.find((x) => x.id === p_id && x.member_id === p_member && !x.voided) || fail("找不到這個行程");
+      Object.assign(e, v);
+      return e.id;
+    }
+    const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, ...v, done_months: [], voided: false, created_at: now() };
+    db.events.push(row);
+    return row.id;
+  },
+  void_event: ({ p_id }) => {
+    const e = db.events.find((x) => x.id === p_id && !x.voided) || fail("找不到這個行程");
+    needAccess(e.member_id);
+    e.voided = true;
+  },
+  set_event_done: ({ p_id, p_month, p_done }) => {
+    const e = db.events.find((x) => x.id === p_id && !x.voided) || fail("找不到這個行程");
+    needAccess(e.member_id);
+    const s = new Set<string>(e.done_months || []);
+    if (p_done) s.add(p_month); else s.delete(p_month);
+    e.done_months = Array.from(s);
+  },
+  set_record_date: ({ p_kind, p_id, p_day }) => {
+    const r = (p_kind === "expense" ? db.expenses : p_kind === "income" ? db.incomes : fail("種類不正確")).find((x: Row) => x.id === p_id && !x.voided) || fail("找不到這筆紀錄");
+    needAccess(r.member_id);
+    if (p_day > todayTW()) fail("日期不能是未來，未來的帳務請記成預定行程");
+    if (p_day.slice(0, 7) !== r.month) fail("只能改成同一個月的日期");
+    if (mem(r.member_id).role === "kid" && p_day !== todayTW()) fail("小孩的記帳要在當天記");
+    r.created_at = new Date(p_day + "T12:00:00+08:00").toISOString();
+    if (p_kind === "expense") r.spent_on = p_day;
   },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };

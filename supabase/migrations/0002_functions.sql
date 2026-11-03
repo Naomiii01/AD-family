@@ -576,3 +576,10 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: stock_cost_unknown
 -- stock_trades.cost_known (default true). mark_cost_unknown(p_id): for a 'none'-jar buy whose cost couldn't be found;
 --   the app books it at the current price so its gain starts from 0, and shows 成本不明.
+
+-- migration: calendar
+-- events(member, day, time, title, note, amount?, dir ''|out|in, repeat none|monthly, done_months jsonb, voided); RLS read via can_access.
+-- save_event(p_id?, p_member, p_day, p_time, p_title, p_note, p_amount, p_dir, p_repeat) → id; void_event(p_id);
+-- set_event_done(p_id, p_month, p_done): one occurrence handled (monthly items by month).
+-- set_record_date(p_kind expense|income, p_id, p_day): moves a just-made record to an earlier day of the same month
+--   (never the future; kids only today).

@@ -11,6 +11,7 @@ import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
 import { PendingCard } from "./Pending";
+import { Calendar } from "./Calendar";
 
 const SL: Record<string, string> = { plan: "月初規劃中", active: "進行中", closed: "已結算" };
 
@@ -29,11 +30,19 @@ export default function Month({ app }: { app: App }) {
   const { data, sel, mk, setMk } = app;
   const mo = data.months.find((x) => x.month === mk);
   const status = mo ? mo.status : "plan";
+  const [view, setView] = useState<"list" | "cal">(() => { try { return localStorage.getItem("adf-month-view") === "cal" ? "cal" : "list"; } catch { return "list"; } });
+  const pick = (v: "list" | "cal") => { setView(v); try { localStorage.setItem("adf-month-view", v); } catch { /* storage unavailable */ } };
   return (
     <>
       <MonthNav mk={mk} setMk={setMk} />
-      <div><span className={`pill ${status}`}>{SL[status]}</span></div>
-      {!mo ? (mk < curMonth() ? <section className="card"><p className="muted">{mkLabel(mk)} 沒有規劃紀錄。</p></section> : <Plan app={app} />) : <Active app={app} mo={mo} />}
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <span className={`pill ${status}`}>{SL[status]}</span>
+        <div className="seg seg-sm" role="group" aria-label="顯示方式">
+          <button className={view === "list" ? "on" : ""} onClick={() => pick("list")}>記帳</button>
+          <button className={view === "cal" ? "on" : ""} onClick={() => pick("cal")}>月曆</button>
+        </div>
+      </div>
+      {view === "cal" ? <Calendar app={app} /> : !mo ? (mk < curMonth() ? <section className="card"><p className="muted">{mkLabel(mk)} 沒有規劃紀錄。</p></section> : <Plan app={app} />) : <Active app={app} mo={mo} />}
     </>
   );
 }
