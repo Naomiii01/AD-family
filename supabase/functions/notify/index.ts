@@ -28,6 +28,8 @@ Deno.serve(async (req) => {
     const q = await admin().rpc("pending_add", { p_token: token, p_dir: p.dir, p_amount: p.amount, p_bank: p.bank, p_note: p.note });
     if (q.error) return json({ ok: false, notify: true, message: q.error.message });
     if (q.data.dup) return json({ ok: true, dup: true, notify: false, message: "" });
+    if (q.data.matched) return json({ ok: true, notify: true,
+      message: `${p.bank}股票交割 ${p.amount} 元，就是股票帳裡${q.data.side === "buy" ? "買" : "賣"}「${q.data.stock}」那筆，不用另外記。` });
     return json({ ok: true, pending: true, notify: true,
       message: `${p.bank}${p.dir === "in" ? "入帳" : "轉出"} ${p.amount} 元，打開 My零用錢 確認要怎麼記（待確認 ${q.data.count} 筆）` });
   }

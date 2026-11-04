@@ -583,3 +583,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- set_event_done(p_id, p_month, p_done): one occurrence handled (monthly items by month).
 -- set_record_date(p_kind expense|income, p_id, p_day): moves a just-made record to an earlier day of the same month
 --   (never the future; kids only today).
+
+-- migration: stock_settlement_match
+-- pending_add: a '股票交割' item whose amount matches a stock trade from the last 10 days (buy: shares×price+fee for money
+--   out, sell: shares×price−fee−tax for money in) is stored already closed (result 'stock') and reported as matched.

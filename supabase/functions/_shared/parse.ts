@@ -30,6 +30,8 @@ const IN_MOVE = /存款入帳|入帳通知|轉入|匯入|收到.{0,8}(轉帳|匯
 const OUT_MOVE = /轉出|轉帳交易|轉帳(成功|完成)|跨行轉帳|匯出|匯款(成功|完成)|提款|提領|自動扣款|扣款成功/;
 const NOISE = /驗證碼|OTP|密碼|優惠|活動|抽獎|登入|回饋|紅利|點數|失敗|未成功/;
 const CARD_SPEND = /消費|刷卡|信用卡|簽帳/;
+// Stock settlement (T+2 交割): money moving for a trade already recorded in the stock account, never a purchase.
+const SETTLE = /交割|證券|股款|集保|複委託|券商/;
 
 function toInt(s: string) {
   return Math.round(Number(s.replace(/[,，\s]/g, "")));
@@ -40,6 +42,12 @@ export function parseNotification(app: string, title: string, body: string): Par
   const all = `${app}\n${text}`;
   if (!text.trim() || !PAYMENT_HINT.test(all)) return { kind: "skip", reason: "不是付款通知", quiet: true };
   if (REFUND.test(text)) return { kind: "skip", reason: "這是退款或取消交易的通知" };
+  if (SETTLE.test(text) && !NOISE.test(text)) {
+    const a = amountOf(text);
+    const bankHit = BANKS.find((b) => all.includes(b));
+    if (a > 0) return { kind: "pending", dir: /入帳|轉入|匯入|收入|存入/.test(text) ? "in" : "out", amount: a,
+      bank: bankHit ? BANK_NAME[bankHit] || bankHit : app.slice(0, 12), note: "股票交割" };
+  }
   if (!NOISE.test(text) && !(CARD_SPEND.test(text) && !/轉帳|入帳/.test(text))) {
     const dir = IN_MOVE.test(text) ? "in" : OUT_MOVE.test(text) ? "out" : null;
     const bankHit = BANKS.find((b) => all.includes(b));
