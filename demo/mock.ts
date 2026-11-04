@@ -605,6 +605,13 @@ const F: Record<string, (a: any) => any> = {
     r.created_at = new Date(p_day + "T12:00:00+08:00").toISOString();
     if (p_kind === "expense") r.spent_on = p_day;
   },
+  resolve_pending_v2: (a) => {
+    const t = db.pending_tx.find((x) => x.id === a.p_id) || fail("找不到這筆通知");
+    needAccess(t.member_id);
+    if (a.p_amount > 0) t.amount = a.p_amount;
+    else if (!t.amount && ["expense", "income"].includes(a.p_action)) fail("請填金額");
+    return F.resolve_pending(a);
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });

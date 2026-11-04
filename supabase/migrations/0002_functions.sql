@@ -587,3 +587,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: stock_settlement_match
 -- pending_add: a '股票交割' item whose amount matches a stock trade from the last 10 days (buy: shares×price+fee for money
 --   out, sell: shares×price−fee−tax for money in) is stored already closed (result 'stock') and reported as matched.
+
+-- migration: pending_without_amount
+-- pending_tx.amount may be 0 (bank alerts such as 兆豐's carry no amount); pending_add accepts 0.
+-- resolve_pending_v2(..., p_amount): fills the amount first; expense / income need one.

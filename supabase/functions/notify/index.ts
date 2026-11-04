@@ -31,6 +31,8 @@ Deno.serve(async (req) => {
     if (q.data.dup) return json({ ok: true, dup: true, notify: false });
     if (q.data.matched) return json({ ok: true, notify: true,
       message: `${p.bank}股票交割 ${p.amount} 元，就是股票帳裡${q.data.side === "buy" ? "買" : "賣"}「${q.data.stock}」那筆，不用另外記。` });
+    if (!p.amount) return json({ ok: true, pending: true, notify: true,
+      message: `${p.bank}有一筆${p.dir === "in" ? "入帳" : "轉出"}（通知沒寫金額），打開 My零用錢 填金額（待確認 ${q.data.count} 筆）` });
     return json({ ok: true, pending: true, notify: true,
       message: `${p.bank}${p.dir === "in" ? "入帳" : "轉出"} ${p.amount} 元，打開 My零用錢 確認要怎麼記（待確認 ${q.data.count} 筆）` });
   }

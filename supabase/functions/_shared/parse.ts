@@ -7,7 +7,7 @@ export type Parsed =
   | { kind: "skip"; reason: string; quiet?: boolean };
 
 // A notification must look like a payment at all; anything else (chat messages, news, promos) is ignored silently.
-const PAYMENT_HINT = /付款|消費|刷卡|扣款|支付|交易|購買|pay|NT\s*\$|NTD|新[台臺]幣|金額|入帳|轉帳|轉出|轉入|匯款|匯入|存款|提款/i;
+const PAYMENT_HINT = /付款|消費|刷卡|扣款|支付|交易|購買|pay|NT\s*\$|NTD|新[台臺]幣|金額|入帳|轉帳|轉出|轉入|匯款|匯入|存款|提款|扣帳/i;
 const REFUND = /退款|退貨|退刷|取消交易|交易取消|已取消/;
 
 const BANKS = [
@@ -27,7 +27,7 @@ const NOT_SPEND = /轉出|轉帳|扣繳|退款|退貨|退刷|取消交易|交易
 
 // Bank account movements: no merchant or payer in the text, so they wait in the app for the person to say what they were.
 const IN_MOVE = /存款入帳|入帳通知|轉入|匯入|收到.{0,8}(轉帳|匯款)|入帳/;
-const OUT_MOVE = /轉出|轉帳交易|轉帳(成功|完成)|跨行轉帳|匯出|匯款(成功|完成)|提款|提領|自動扣款|扣款成功/;
+const OUT_MOVE = /扣帳|轉出|轉帳交易|轉帳(成功|完成)|跨行轉帳|匯出|匯款(成功|完成)|提款|提領|自動扣款|扣款成功/;
 const NOISE = /驗證碼|OTP|密碼|優惠|活動|抽獎|登入|回饋|紅利|點數|失敗|未成功/;
 const CARD_SPEND = /消費|刷卡|信用卡|簽帳/;
 // Stock settlement (T+2 交割): money moving for a trade already recorded in the stock account, never a purchase.
@@ -52,9 +52,10 @@ export function parseNotification(app: string, title: string, body: string): Par
     const dir = IN_MOVE.test(text) ? "in" : OUT_MOVE.test(text) ? "out" : null;
     const bankHit = BANKS.find((b) => all.includes(b));
     if (dir && bankHit) {
+      // Some banks (兆豐) never put the amount in the alert: keep it as 待確認 with the amount left for the person.
       const a = amountOf(text);
-      if (!(a > 0)) return { kind: "skip", reason: "看不懂這則通知的金額" };
-      const note = (text.match(/【([^】]{2,20})】/)?.[1] || (dir === "in" ? "入帳" : "轉出")).slice(0, 30);
+      const tag = text.match(/【([^】]{2,20})】/)?.[1] || "";
+      const note = (tag && !/銀行$/.test(tag) ? tag : (text.match(/(台幣|臺幣)?(扣帳|入帳|轉帳|轉出|轉入)通知/)?.[0] || (dir === "in" ? "入帳" : "轉出"))).slice(0, 30);
       return { kind: "pending", dir, amount: a, bank: BANK_NAME[bankHit] || bankHit, note };
     }
   }

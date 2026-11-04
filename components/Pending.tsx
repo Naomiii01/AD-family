@@ -52,11 +52,14 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
   const [cat, setCat] = useState(rule?.category || (isOut ? "其他" : "兼職"));
   const [item, setItem] = useState(rule?.item || "");
   const [busy, setBusy] = useState(false);
+  const noAmt = !tx.amount;
+  const [amt, setAmt] = useState("");
+  const amount = noAmt ? Math.round(+amt) || 0 : tx.amount;
   const [maybe, setMaybe] = useState<string>("");
 
   // Already logged by hand? Look for the same amount within two days either side.
   useEffect(() => {
-    if (!open) return;
+    if (!open || noAmt) return;
     const t = Date.parse(tx.created_at), from = new Date(t - 2 * 864e5).toISOString();
     const q = isOut
       ? supabase.from("expenses").select("item,amount,created_at").eq("member_id", sel.id).eq("voided", false).eq("amount", tx.amount).gte("created_at", from)
@@ -80,7 +83,7 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
 
   async function resolve(a: string) {
     setBusy(true);
-    const [, e] = await rpc("resolve_pending", { p_id: tx.id, p_action: a, p_jar: jar, p_item: item, p_category: cat, p_remember: true });
+    const [, e] = await rpc("resolve_pending_v2", { p_id: tx.id, p_action: a, p_jar: jar, p_item: item, p_category: cat, p_remember: true, p_amount: noAmt ? amount : null });
     setBusy(false);
     if (e) return toast(e);
     toast(a === "expense" ? "記成支出了" : a === "income" ? "記成收入了" : a === "card" ? "卡費繳好了" : "已關掉這筆");
@@ -93,18 +96,22 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
       <button className="pend-head" onClick={onOpen} aria-expanded={open}>
         <span className={`tag ${isOut ? "want" : "income"}`}>{isOut ? "轉出" : "入帳"}</span>
         <span className="t">{tx.bank}<br /><span className="d">{tx.note} · {shortDate(tx.created_at)}</span></span>
-        <b className="num" style={{ color: isOut ? "var(--warn)" : "var(--long)" }}>{isOut ? "−" : "+"}{fmt(tx.amount)}</b>
+        {noAmt ? <b className="small" style={{ color: "var(--warn)" }}>金額待填</b>
+          : <b className="num" style={{ color: isOut ? "var(--warn)" : "var(--long)" }}>{isOut ? "−" : "+"}{fmt(tx.amount)}</b>}
       </button>
       {!open && rule && (
         <div className="pend-quick">
           <span className="note">上次：{acts.find(([k]) => k === rule.action)?.[1]}{rule.jar && ["expense", "income"].includes(rule.action) ? ` · ${jars.find((j) => j.key === rule.jar)?.name || rule.jar}` : ""}{rule.item ? ` · ${rule.item}` : ""}</span>
-          {rule.action !== "card" && <button className="btn sm primary" disabled={busy} onClick={() => resolve(rule.action)}>照上次</button>}
+          {rule.action !== "card" && (!noAmt || !["expense", "income"].includes(rule.action)) && <button className="btn sm primary" disabled={busy} onClick={() => resolve(rule.action)}>照上次</button>}
           <button className="btn sm" onClick={onOpen}>改</button>
         </div>
       )}
       {!open && !rule && <div className="pend-quick"><button className="btn sm primary" onClick={onOpen}>確認怎麼記</button></div>}
       {open && (
         <div className="income-form">
+          {noAmt && (
+            <label className="f">{tx.bank}的通知沒寫金額，請打開{tx.bank} App 查一下再填<input id={`pd-amt-${tx.id}`} type="number" inputMode="numeric" min={1} placeholder="金額" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
+          )}
           {maybe && <p className="note" style={{ color: "var(--warn)" }}>{maybe}。是的話選「不用記」。</p>}
           <div className="seg" role="group" aria-label="這筆是什麼">
             {acts.map(([k, n]) => <button key={k} className={action === k ? "on" : ""} onClick={() => setAction(k)}>{n}</button>)}
@@ -120,10 +127,10 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
               <div className="chips" role="group" aria-label="類別">
                 {cats.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
               </div>
-              <button className="btn primary" disabled={busy} onClick={() => resolve(action)}>{isOut ? `記成支出 ${fmt(tx.amount)}` : `記成收入 ${fmt(tx.amount)}`}</button>
+              <button className="btn primary" disabled={busy || !(amount > 0)} onClick={() => resolve(action)}>{isOut ? `記成支出 ${fmt(amount)}` : `記成收入 ${fmt(amount)}`}</button>
             </>
           )}
-          {action === "card" && <CardBill app={app} jar="fixed" history={[]} initialBill={tx.amount} onDone={() => resolve("card")} />}
+          {action === "card" && <CardBill app={app} jar="fixed" history={[]} initialBill={amount || undefined} onDone={() => resolve("card")} />}
           {(action === "stock" || action === "ignore") && <button className="btn primary" disabled={busy} onClick={() => resolve(action)}>關掉這筆</button>}
         </div>
       )}
