@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
 import { fmt, shortDate, catsFor, INCOME_CATS, jarList, spendable } from "@/lib/util";
@@ -7,6 +7,11 @@ import { CardBill } from "./CardBill";
 
 type Tx = { id: string; dir: "out" | "in"; amount: number; bank: string; note: string; created_at: string };
 type Rule = { bank: string; dir: string; action: string; jar: string; category: string; item: string };
+
+// Every mounted card shares one refresh signal, and only the first one on screen draws itself,
+// so a resolved item can never linger in a second copy of the card.
+const bus = typeof window !== "undefined" ? new EventTarget() : null;
+const shown: string[] = [];
 
 /** Bank transfers and deposits caught from notifications, waiting for the person to say what they were. */
 export function usePending(memberId: string) {
@@ -20,15 +25,30 @@ export function usePending(memberId: string) {
     setList((tx as Tx[]) || []);
     setRules((rl as Rule[]) || []);
   }, [memberId]);
-  useEffect(() => { load(); }, [load]);
-  return { list, rules, reload: load };
+  useEffect(() => {
+    load();
+    const on = () => load();
+    bus?.addEventListener("pending", on);
+    return () => bus?.removeEventListener("pending", on);
+  }, [load]);
+  const reload = useCallback(async () => { bus?.dispatchEvent(new Event("pending")); }, []);
+  return { list, rules, reload };
 }
 
 export function PendingCard({ app }: { app: App }) {
   const { sel } = app;
   const p = usePending(sel.id);
   const [open, setOpen] = useState<string | null>(null);
-  if (!p.list.length) return null;
+  const me = useId();
+  const [first, setFirst] = useState(false);
+  useEffect(() => {
+    shown.push(me);
+    const check = () => setFirst(shown[0] === me);
+    check();
+    bus?.addEventListener("owner", check);
+    return () => { shown.splice(shown.indexOf(me), 1); bus?.removeEventListener("owner", check); bus?.dispatchEvent(new Event("owner")); };
+  }, [me]);
+  if (!first || !p.list.length) return null;
   return (
     <section className="card pending">
       <div className="card-h"><h3>待確認 {p.list.length} 筆</h3><span className="small muted">從銀行通知抓到的</span></div>
