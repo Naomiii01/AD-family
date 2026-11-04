@@ -19,15 +19,16 @@ Deno.serve(async (req) => {
     message: "捷徑沒有收到通知的文字。請在「從通知記帳」把 body 改成通知的「內文」、title 改成「標題」。" });
 
   const p = parseNotification(app, title, body);
-  // Quiet skips answer with an empty message so the shortcut shows nothing.
+  // Quiet skips answer with no message at all: the shortcut's 「如果 有任何數值」 then shows nothing
+  // (an empty string still counts as a value and made iOS show a blank 「通知」).
   if (p.kind === "skip") return p.quiet
-    ? json({ ok: false, skipped: true, notify: false, message: "" })
+    ? json({ ok: false, skipped: true, notify: false })
     : json({ ok: false, skipped: true, notify: true, message: `沒有自動記帳：${p.reason}。需要的話請手動記一筆。` });
 
   if (p.kind === "pending") {
     const q = await admin().rpc("pending_add", { p_token: token, p_dir: p.dir, p_amount: p.amount, p_bank: p.bank, p_note: p.note });
     if (q.error) return json({ ok: false, notify: true, message: q.error.message });
-    if (q.data.dup) return json({ ok: true, dup: true, notify: false, message: "" });
+    if (q.data.dup) return json({ ok: true, dup: true, notify: false });
     if (q.data.matched) return json({ ok: true, notify: true,
       message: `${p.bank}股票交割 ${p.amount} 元，就是股票帳裡${q.data.side === "buy" ? "買" : "賣"}「${q.data.stock}」那筆，不用另外記。` });
     return json({ ok: true, pending: true, notify: true,
@@ -38,7 +39,7 @@ Deno.serve(async (req) => {
     p_token: token, p_item: p.item, p_amount: p.amount, p_pay_method: p.payMethod, p_pay_detail: p.payDetail,
   });
   if (r.error) return json({ ok: false, notify: true, message: r.error.message });
-  if (r.data.dup) return json({ ok: true, dup: true, notify: false, message: "" });
+  if (r.data.dup) return json({ ok: true, dup: true, notify: false });
   const left = Number(r.data.left);
   const tail = left < 0 ? `自由罐透支 ${-left} 元，記得補回來。` : `自由罐還剩 ${left} 元。`;
   return json({ ok: true, notify: true, message: `已自動記帳：${p.item} ${p.amount} 元${p.payDetail ? `（${p.payDetail}）` : ""}。${tail}` });
