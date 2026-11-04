@@ -13,9 +13,9 @@ const REFUND = /退款|退貨|退刷|取消交易|交易取消|已取消/;
 const BANKS = [
   "國泰世華", "中國信託", "中信", "台新", "玉山", "台北富邦", "富邦", "永豐", "兆豐", "聯邦", "第一銀行", "一銀", "華南", "彰化銀行", "彰銀",
   "合作金庫", "合庫", "星展", "滙豐", "匯豐", "渣打", "遠東", "遠銀", "元大", "凱基", "上海商銀", "新光", "王道", "將來銀行", "LINE Bank",
-  "國泰", "樂天", "土地銀行", "土銀", "臺灣銀行", "台灣銀行", "臺銀", "陽信", "安泰", "日盛", "台中銀",
+  "國泰", "Richart", "樂天", "土地銀行", "土銀", "臺灣銀行", "台灣銀行", "臺銀", "陽信", "安泰", "日盛", "台中銀",
 ];
-const BANK_NAME: Record<string, string> = { 中信: "中國信託", 國泰: "國泰世華", 一銀: "第一銀行", 彰銀: "彰化銀行", 合庫: "合作金庫", 匯豐: "滙豐", 遠銀: "遠東", 土銀: "土地銀行", 臺灣銀行: "台灣銀行", 臺銀: "台灣銀行" };
+const BANK_NAME: Record<string, string> = { 中信: "中國信託", 國泰: "國泰世華", Richart: "台新", 一銀: "第一銀行", 彰銀: "彰化銀行", 合庫: "合作金庫", 匯豐: "滙豐", 遠銀: "遠東", 土銀: "土地銀行", 臺灣銀行: "台灣銀行", 臺銀: "台灣銀行" };
 const EPAYS: [RegExp, string][] = [
   [/line\s*pay|LINE Pay/i, "LINE Pay"], [/街口|jko\s*pay/i, "街口"], [/全支付|px\s*pay/i, "全支付"], [/悠遊付|easy\s*wallet/i, "悠遊付"],
   [/icash\s*pay/i, "icash Pay"], [/全盈/i, "全盈+PAY"], [/pi\s*拍|拍錢包/i, "Pi 拍錢包"], [/一卡通\s*money|ipass\s*money/i, "一卡通"],
@@ -58,10 +58,12 @@ export function parseNotification(app: string, title: string, body: string): Par
       return { kind: "pending", dir, amount: a, bank: BANK_NAME[bankHit] || bankHit, note };
     }
   }
-  if (NOT_SPEND.test(text)) return { kind: "skip", reason: "不是消費（轉帳、儲值、帳單、優惠或驗證碼）", quiet: true };
+  // Card alerts end with disclaimers like 「實際消費資訊以帳單為準」; those words don't make it a bill.
+  if (NOT_SPEND.test(text.replace(/以帳單為準|帳單為準|請洽客服|如有疑問/g, ""))) return { kind: "skip", reason: "不是消費（轉帳、儲值、帳單、優惠或驗證碼）", quiet: true };
 
   const amount = amountOf(text);
-  if (!(amount > 0)) return { kind: "skip", reason: "看不懂這則通知的金額" };
+  // Teasers like 「您剛剛使用信用卡消費，請使用手機查看詳細內容」 carry no amount at all; skip them quietly.
+  if (!(amount > 0)) return { kind: "skip", reason: "看不懂這則通知的金額", quiet: /查看|詳細內容|詳情/.test(text) };
   return finish(app, text, all, amount);
 }
 
