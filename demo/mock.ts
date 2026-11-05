@@ -612,6 +612,7 @@ const F: Record<string, (a: any) => any> = {
     else if (!t.amount && ["expense", "income"].includes(a.p_action)) fail("請填金額");
     return F.resolve_pending(a);
   },
+  log_client_error: () => null,
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });

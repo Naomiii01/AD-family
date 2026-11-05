@@ -591,3 +591,7 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: pending_without_amount
 -- pending_tx.amount may be 0 (bank alerts such as 兆豐's carry no amount); pending_add accepts 0.
 -- resolve_pending_v2(..., p_amount): fills the amount first; expense / income need one.
+
+-- migration: client_errors
+-- client_errors(user_id, msg, stack, ua, path); no client read access. log_client_error(...) inserts for auth.uid(),
+--   capped at 30 per user per hour. The app reports uncaught errors and unhandled rejections.

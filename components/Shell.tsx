@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase, MEMBER_COLS } from "@/lib/supabase";
+import { supabase, rpc, MEMBER_COLS } from "@/lib/supabase";
 import { curMonth, store } from "@/lib/util";
 import { useMember, MemberData } from "@/lib/useMember";
 import { Avatar, ICONS } from "./ui";
@@ -29,7 +29,20 @@ export type App = {
 
 const TABS: [string, string][] = [["jars", "罐子"], ["month", "本月"], ["review", "檢討"], ["year", "年度"], ["more", "更多"]];
 
+/** Report uncaught errors so a broken screen on someone's phone can be diagnosed. */
+function useErrorReports() {
+  useEffect(() => {
+    const send = (msg: string, stack = "") => { rpc("log_client_error", { p_msg: msg, p_stack: stack, p_ua: navigator.userAgent, p_path: location.pathname }); };
+    const onErr = (e: ErrorEvent) => send(e.message || "error", e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}`);
+    const onRej = (e: PromiseRejectionEvent) => send(String(e.reason?.message || e.reason || "unhandled rejection"), e.reason?.stack || "");
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => { window.removeEventListener("error", onErr); window.removeEventListener("unhandledrejection", onRej); };
+  }, []);
+}
+
 export default function Shell({ userId }: { userId: string }) {
+  useErrorReports();
   const [me, setMe] = useState<any>(null);
   const [family, setFamily] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
