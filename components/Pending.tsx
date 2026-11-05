@@ -101,9 +101,10 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
     ignore: "自己帳戶之間轉來轉去、已經記過的、薪水（月初規劃已算）都選這個。",
   };
 
-  async function resolve(a: string) {
+  // A one-tap 不用記 is a one-off: it closes the item without replacing the remembered choice for this bank.
+  async function resolve(a: string, remember = true) {
     setBusy(true);
-    const [, e] = await rpc("resolve_pending_v2", { p_id: tx.id, p_action: a, p_jar: jar, p_item: item, p_category: cat, p_remember: true, p_amount: noAmt ? amount : null });
+    const [, e] = await rpc("resolve_pending_v2", { p_id: tx.id, p_action: a, p_jar: jar, p_item: item, p_category: cat, p_remember: remember, p_amount: noAmt ? amount : null });
     setBusy(false);
     if (e) return toast(e);
     toast(a === "expense" ? "記成支出了" : a === "income" ? "記成收入了" : a === "card" ? "卡費繳好了" : "已關掉這筆");
@@ -124,9 +125,15 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
           <span className="note">上次：{acts.find(([k]) => k === rule.action)?.[1]}{rule.jar && ["expense", "income"].includes(rule.action) ? ` · ${jars.find((j) => j.key === rule.jar)?.name || rule.jar}` : ""}{rule.item ? ` · ${rule.item}` : ""}</span>
           {rule.action !== "card" && (!noAmt || !["expense", "income"].includes(rule.action)) && <button className="btn sm primary" disabled={busy} onClick={() => resolve(rule.action)}>照上次</button>}
           <button className="btn sm" onClick={onOpen}>改</button>
+          {rule.action !== "ignore" && <button className="btn sm ghost" disabled={busy} onClick={() => resolve("ignore", false)}>不用記</button>}
         </div>
       )}
-      {!open && !rule && <div className="pend-quick"><button className="btn sm primary" onClick={onOpen}>確認怎麼記</button></div>}
+      {!open && !rule && (
+        <div className="pend-quick">
+          <button className="btn sm primary" onClick={onOpen}>確認怎麼記</button>
+          <button className="btn sm ghost" disabled={busy} onClick={() => resolve("ignore", false)}>不用記</button>
+        </div>
+      )}
       {open && (
         <div className="income-form">
           {noAmt && (
@@ -151,7 +158,7 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
             </>
           )}
           {action === "card" && <CardBill app={app} jar="fixed" history={[]} initialBill={amount || undefined} onDone={() => resolve("card")} />}
-          {(action === "stock" || action === "ignore") && <button className="btn primary" disabled={busy} onClick={() => resolve(action)}>關掉這筆</button>}
+          {(action === "stock" || action === "ignore") && <button className="btn primary" disabled={busy} onClick={() => resolve(action)}>{action === "ignore" ? "確定不用記" : "確定（交易在股票帳記）"}</button>}
         </div>
       )}
     </div>
