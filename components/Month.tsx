@@ -12,6 +12,7 @@ import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
 import { Entry, AddFab, DayList, type EditTarget } from "./Entry";
 import { BudgetCard } from "./Budget";
+import { VoiceSheet } from "./Voice";
 import { PendingCard } from "./Pending";
 import { Calendar } from "./Calendar";
 
@@ -206,6 +207,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const ex = useExpenses(sel.id, mk);
   const inc = useIncomes(sel.id, mk);
   const [sheet, setSheet] = useState<{ edit: EditTarget } | null>(null);
+  const [voice, setVoice] = useState(false);
   const [full, setFull] = useState(false);
   const simple = simpleOf(sel) && !full;
   const isCur = mk === curMonth();
@@ -275,7 +277,8 @@ function Active({ app, mo }: { app: App; mo: any }) {
       </section>
       {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}
       {mo.status === "active" && <button className="btn big" onClick={() => app.go("review")}>月底了，去做檢討 →</button>}
-      {mo.status === "active" && isCur && !simple && <AddFab onClick={() => setSheet({ edit: null })} />}
+      {mo.status === "active" && isCur && !simple && <AddFab onClick={() => setSheet({ edit: null })} onVoice={() => setVoice(true)} />}
+      {voice && <VoiceSheet app={app} onClose={() => setVoice(false)} onSaved={() => { ex.reload(); inc.reload(); }} />}
       {sheet && <Entry app={app} edit={sheet.edit} onClose={() => setSheet(null)} onSaved={() => { ex.reload(); inc.reload(); }} />}
     </>
   );

@@ -607,3 +607,7 @@ alter table public.families add column if not exists guardian text not null defa
 --   save_account(p_id?, p_member, p_name, p_kind, p_balance), transfer_account(p_from, p_to, p_amount, p_note), void_account(p_id).
 --   Accounts track where money sits and never touch jar balances.
 -- members.theme also allows mint, lavender, peach, latte (set_theme updated).
+-- Voice logging (Siri shortcut → edge function `voice`):
+--   voice_add(p_token, p_items jsonb) — service role only. Resolves the member by quick_hash, then for each item
+--   calls add_expense_v3 (source 'voice') or add_income (jar = where that income category went last time, else free),
+--   and set_record_date for 昨天/前天 within the same month. Returns {name, items, free}.

@@ -5,6 +5,7 @@ import { curMonth, shiftMonth } from "@/lib/util";
 export const SUPABASE_URL = "https://example.invalid";
 export const QUICK_URL = "（正式版部署後才會有網址）";
 export const NOTIFY_URL = "（正式版部署後才會有網址）";
+export const VOICE_URL = "（正式版部署後才會有網址）";
 export const NOTIFY_SHORTCUT = "";
 export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device

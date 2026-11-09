@@ -219,8 +219,13 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
 }
 
 /** The round button that opens the sheet. */
-export function AddFab({ onClick }: { onClick: () => void }) {
-  return <button className="fab" onClick={onClick}><span aria-hidden="true">＋</span> 記一筆</button>;
+export function AddFab({ onClick, onVoice }: { onClick: () => void; onVoice?: () => void }) {
+  return (
+    <div className="fab-row">
+      {onVoice && <button className="fab mic" onClick={onVoice} aria-label="語音記帳"><span aria-hidden="true">🎙</span></button>}
+      <button className="fab" onClick={onClick}><span aria-hidden="true">＋</span> 記一筆</button>
+    </div>
+  );
 }
 
 /** Records grouped by day, newest first; swipe a row to the right (or tap it) to edit or delete. */
@@ -279,11 +284,12 @@ export function DayList({ app, expenses, incomes, editable, onEdit, onDelete }: 
                     {kind === "expense" && payLabel(r) ? ` · ${payLabel(r)}` : ""}
                     {kind === "income" ? ` · ${Object.keys(r.split || {}).map((k) => jarName(sel, k)).join("、")}` : ""}
                   </span>
-                  {(r.source === "notify" || r.source === "shortcut" || (kind === "expense" && r.type && nwOn)) && (
+                  {(r.source === "notify" || r.source === "shortcut" || r.source === "voice" || (kind === "expense" && r.type && nwOn)) && (
                     <span className="rec-tags">
                       {kind === "expense" && r.type && nwOn && <span className={`tag ${r.type}`}>{r.type === "need" ? "需要" : "想要"}</span>}
                       {r.source === "notify" && <span className="tag shortcut">自動</span>}
                       {r.source === "shortcut" && <span className="tag shortcut">捷徑</span>}
+                      {r.source === "voice" && <span className="tag shortcut">Siri</span>}
                     </span>
                   )}
                 </span>

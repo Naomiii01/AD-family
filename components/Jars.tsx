@@ -3,6 +3,7 @@ import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal"
 import { QuickLog, simpleOf } from "./QuickLog";
 import { PendingCard } from "./Pending";
 import { Entry, AddFab } from "./Entry";
+import { VoiceSheet } from "./Voice";
 import { NetWorthCard } from "./Assets";
 import { StockCard, useStocks, holdingsOf, stockSummary } from "./Stocks";
 import { useEffect, useState } from "react";
@@ -31,6 +32,7 @@ export default function Jars({ app }: { app: App }) {
   const showNudge = cur?.status === "active" && (idle === null ? true : idle >= 2);
   const [advs, setAdvs] = useState<any[]>([]);
   const [sheet, setSheet] = useState(false);
+  const [voice, setVoice] = useState(false);
   useEffect(() => {
     supabase.from("advances").select("amount,repay_month,repaid,kind").eq("member_id", sel.id).eq("repaid", false)
       .then(({ data: rows }: any) => setAdvs(rows || []));
@@ -105,7 +107,8 @@ export default function Jars({ app }: { app: App }) {
         {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，${gd(family)}配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
         {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}
       </p>
-      {cur?.status === "active" && !simpleOf(sel) && <AddFab onClick={() => setSheet(true)} />}
+      {cur?.status === "active" && !simpleOf(sel) && <AddFab onClick={() => setSheet(true)} onVoice={() => setVoice(true)} />}
+      {voice && <VoiceSheet app={app} onClose={() => setVoice(false)} onSaved={() => {}} />}
       {sheet && <Entry app={app} edit={null} onClose={() => setSheet(false)} onSaved={() => {}} />}
     </>
   );

@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { App } from "./Shell";
-import { rpc, QUICK_URL, NOTIFY_URL, NOTIFY_SHORTCUT } from "@/lib/supabase";
+import { rpc, QUICK_URL, NOTIFY_URL, NOTIFY_SHORTCUT, VOICE_URL } from "@/lib/supabase";
 import { copyText, Confirm } from "./ui";
 import { IS_DEMO } from "@/lib/util";
 
@@ -101,6 +101,20 @@ export default function QuickSetup({ app }: { app: App }) {
           <li>想更快：在捷徑上長按 → 「加入主畫面」；或對 Siri 說「零用金記帳」。</li>
         </ol>
         <p className="note">記帳一樣要先完成本月規劃，自由罐不夠時會顯示剩多少錢。</p>
+      </section>
+
+      <section className="card">
+        <h3>嘿 Siri，語音記帳</h3>
+        <p className="small">不用打開 App，對 Siri 說「記帳」，再說「午餐牛肉麵一百五，飲料六十」，就會記好兩筆。也可以說「昨天計程車兩百五刷卡」「收到兼職三千」。App 裡「記一筆」旁邊的 🎙 也能直接用說的。</p>
+        <ol className="steps">
+          <li>捷徑 App → ＋ 新增捷徑，名稱改成「<b>記帳</b>」（這就是對 Siri 說的話）。</li>
+          <li>加入「<b>聽寫文字</b>」，語言選「中文（台灣）」。</li>
+          <li>加入「<b>URL</b>」，<b>手動打</b>：<div className="mono">{VOICE_URL}</div></li>
+          <li>加入「<b>取得 URL 內容</b>」：方法 POST、要求本文 JSON，欄位：<div className="mono">token → 記帳碼<br />text → 「聽寫的文字」</div></li>
+          <li>加入「<b>取得辭典值</b>」（鍵：message），再加「<b>朗讀文字</b>」或「顯示通知」，內容放辭典值。Siri 會唸出「已記 2 筆…自由罐還剩…」。</li>
+          <li>試一次：說「嘿 Siri，記帳」→「早餐六十五」。</li>
+        </ol>
+        <p className="note">記在自由罐。說了「刷卡」「LINE Pay」會帶付款方式，「昨天」「前天」會記在那一天。分類是照說的內容猜的，記錯了在「本月」清單往右滑就能改。</p>
       </section>
 
       <section className="card">

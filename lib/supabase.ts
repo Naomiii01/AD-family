@@ -11,6 +11,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 export const QUICK_URL = `${SUPABASE_URL}/functions/v1/quick`;
 export const NOTIFY_URL = `${SUPABASE_URL}/functions/v1/notify`;
+export const VOICE_URL = `${SUPABASE_URL}/functions/v1/voice`;
 /** iCloud link of the shared 「從通知記帳」 shortcut (asks for the 記帳碼 on import). Empty until one is published. */
 export const NOTIFY_SHORTCUT = process.env.NEXT_PUBLIC_NOTIFY_SHORTCUT || "";
 
