@@ -1,6 +1,6 @@
 // Builds the single-file 體驗版 (demo) page: same components, local data layer instead of Supabase.
 import { build } from "esbuild";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +26,7 @@ const out = await build({
   define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_DEMO": '"1"' },
 });
 const js = out.outputFiles[0].text.replace(/<\/script/g, "<\\/script");
+const catImgs = Object.fromEntries(readdirSync(resolve(root, "public/cat")).filter((f) => f.endsWith(".webp")).map((f) => [f.replace(".webp", ""), "data:image/webp;base64," + readFileSync(resolve(root, "public/cat", f)).toString("base64")]));
 const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const html = `<title>My零用錢</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +36,7 @@ const html = `<title>My零用錢</title>
 body{padding-top:0}
 </style>
 <div id="root"><div class="splash">載入中…</div></div>
+<script>window.__CAT_IMG=${JSON.stringify(catImgs)}</script>
 <script>${js}</script>
 `;
 writeFileSync(process.argv[2] || resolve(root, "demo/three-jars-demo.html"), html);

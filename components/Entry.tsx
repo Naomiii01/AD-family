@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
 import { fmt, num, catsFor, INCOME_CATS, spendable, jarList, jarName, curMonth, payLabel, gd } from "@/lib/util";
-import { iconOf } from "@/lib/cats";
+import { catImg, iconOf } from "@/lib/cats";
 import { PayPicker, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
 import { movableFrom, balOfJar } from "./Jars";
@@ -22,9 +22,12 @@ export function evalExpr(s: string): number {
 }
 
 export function CatIcon({ cat, size = 40 }: { cat?: string; size?: number }) {
-  const [e, tint] = iconOf(cat);
+  const [img, e, tint] = iconOf(cat);
+  const [bad, setBad] = useState(false);
   return (
-    <span className="cat-ic" aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.5, background: `color-mix(in srgb, ${tint} 22%, var(--surface))` }}>{e}</span>
+    <span className="cat-ic" aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.5, background: `color-mix(in srgb, ${tint} 16%, var(--surface))` }}>
+      {bad ? e : <img src={catImg(img)} alt="" width={Math.round(size * 0.68)} height={Math.round(size * 0.68)} draggable={false} onError={() => setBad(true)} />}
+    </span>
   );
 }
 
