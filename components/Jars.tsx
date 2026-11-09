@@ -6,7 +6,7 @@ import { Entry, AddFab } from "./Entry";
 import { VoiceSheet } from "./Voice";
 import { NetWorthCard } from "./Assets";
 import { StockCard, useStocks, holdingsOf, stockSummary } from "./Stocks";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { rpc, supabase } from "@/lib/supabase";
 import { fmt, num, clamp, curMonth, split, defRatio, daysSince, shortDate, matchOf, stepBonus, gd, jarList, jarName, spendable } from "@/lib/util";
@@ -48,7 +48,7 @@ export default function Jars({ app }: { app: App }) {
       )}
       {showNudge && (
         <div className="banner warn">
-          <span>{idle === null ? "這個月還沒有記帳紀錄。" : `已經 ${idle} 天沒有記帳了。`}每週要記滿 {family.star_days ?? 4} 天才拿得到星星；沒花錢的日子也可以打卡。</span>
+          <span>{idle === null ? "這個月還沒有記帳紀錄。" : `已經 ${idle} 天沒有記帳了。`}{sel.role === "kid" ? `每週要記滿 ${family.star_days ?? 4} 天才拿得到星星；沒花錢的日子也可以打卡。` : "有花錢的話記得補上，用 🎙 說一句就好。"}</span>
           <div><button className="btn sm primary" onClick={() => app.go("month")}>去記帳</button></div>
         </div>
       )}
@@ -60,6 +60,7 @@ export default function Jars({ app }: { app: App }) {
       <Overdraft app={app} />
       {cur?.status === "active" && <PendingCard app={app} />}
       {cur?.status === "active" && simpleOf(sel) && <QuickLog app={app} />}
+      {sel.role !== "kid" ? <AdultJars app={app} /> : <>
       <div className="trio">
         <div className="jarcol">
           <JarSVG kind="free" pct={freeP} />
@@ -80,7 +81,7 @@ export default function Jars({ app }: { app: App }) {
             <div className="ja">{fmt(b.long)}</div>
             <div className="js">只進不出<br />下個目標 {fmt(ms)}</div>
           </div>
-        ) : <InvestCol app={app} />}
+        ) : null}
       </div>
       <ExtraJars app={app} />
       <Stars months={data.months} />
@@ -102,11 +103,11 @@ export default function Jars({ app }: { app: App }) {
           </div>
         </section>
       )}
-      {sel.role !== "kid" && <NetWorthCard app={app} />}
       <p className="note center">
-        {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，${gd(family)}配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
+        {`夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，${gd(family)}配對 ${family.match_pct}%`}
         {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}
       </p>
+      </>}
       {cur?.status === "active" && !simpleOf(sel) && <AddFab onClick={() => setSheet(true)} onVoice={() => setVoice(true)} />}
       {voice && <VoiceSheet app={app} onClose={() => setVoice(false)} onSaved={() => {}} />}
       {sheet && <Entry app={app} edit={null} onClose={() => setSheet(false)} onSaved={() => {}} />}
@@ -114,19 +115,93 @@ export default function Jars({ app }: { app: App }) {
   );
 }
 
-/** Adults: the long jar is the investing jar — cash waiting to invest, plus the stocks it bought. */
-function InvestCol({ app }: { app: App }) {
+/** Grown-ups' jars page: one total, every jar as a tidy row, then dream / stocks / assets. */
+function AdultJars({ app }: { app: App }) {
   const { data, sel } = app;
+  const b = data.bal;
+  const g = data.goal;
+  const cur = data.months.find((x) => x.month === curMonth());
+  const active = cur?.status === "active";
   const st = useStocks(sel.id, data.recent?.[0]?.created_at);
-  const s = stockSummary(holdingsOf(st.trades, st.prices));
-  const total = data.bal.long + s.value;
+  const stocks = stockSummary(holdingsOf(st.trades, st.prices));
+  const [dreamForm, setDreamForm] = useState(false);
+  const [log, setLog] = useState(false);
+  const jars = jarList(sel);
+  const cash = jars.reduce((t, j) => t + balOfJar(app, j.key), 0);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+  const dim = new Date(+today.slice(0, 4), +today.slice(5, 7), 0).getDate();
+  const left = dim - +today.slice(8) + 1;
+  const freeStart = active ? cur!.free_start || 0 : 0;
+
+  const sub = (k: string): React.ReactNode => {
+    const bal = balOfJar(app, k);
+    const planned = cur?.alloc?.[k] || 0;
+    const j = jars.find((x) => x.key === k)!;
+    if (k === "free") return active ? `平均每天可花 ${fmt(Math.max(0, bal) / left)} · 剩 ${left} 天` : "每月可以花光";
+    if (k === "dream") return g ? `${g.name} · ${Math.min(100, Math.round((bal / g.price) * 100))}%` : <span className="link">設定夢想 ›</span>;
+    if (k === "long") return <>可投資現金{stocks.value > 0 ? <> · 股票 {fmt(stocks.value)} <span style={{ color: stocks.gain >= 0 ? "var(--long)" : "var(--warn)" }}>{stocks.gain >= 0 ? "+" : "−"}{fmt(Math.abs(stocks.gain))}</span></> : ""}</>;
+    if (j.target) return `目標 ${fmt(j.target)} · ${Math.min(100, Math.round((bal / j.target) * 100))}%`;
+    if (k === "fixed") return planned ? `本月放 ${fmt(planned)}` : "每月固定要付的錢";
+    if (k === "reserve") return "突發狀況用";
+    return planned ? `本月放 ${fmt(planned)}` : "";
+  };
+  const fill = (k: string) => {
+    const bal = balOfJar(app, k), j = jars.find((x) => x.key === k)!;
+    if (k === "free") return freeStart ? bal / freeStart : bal > 0 ? 0.5 : 0;
+    if (k === "dream") return g ? bal / g.price : 0;
+    if (j.target) return bal / j.target;
+    const planned = cur?.alloc?.[k] || 0;
+    return planned ? bal / planned : bal > 0 ? 0.6 : 0;
+  };
+
   return (
-    <div className="jarcol">
-      <JarSVG kind="long" pct={total > 0 ? Math.min(1, s.value / Math.max(total, 1)) * 0.8 + 0.1 : 0} />
-      <div className="jn k-long">投資罐</div>
-      <div className="ja">{fmt(s.value)}</div>
-      <div className="js">股票市值{s.cost > 0 ? <><br /><span style={{ color: s.gain >= 0 ? "var(--long)" : "var(--warn)" }}>{s.gain >= 0 ? "+" : "−"}{fmt(Math.abs(s.gain))}</span></> : null}{data.bal.long ? <><br />現金 {fmt(data.bal.long)}</> : null}</div>
-    </div>
+    <>
+      <section className="card jars-sum">
+        <div className="muted small">罐子裡共有</div>
+        <div className="big-n">{fmt(cash)}</div>
+        {active && freeStart > 0 && (
+          <>
+            <div className="bar" aria-label="自由罐還剩多少"><span style={{ width: `${clamp(b.free / freeStart, 0, 1) * 100}%`, background: "var(--free)" }} /></div>
+            <div className="kv small"><span>自由罐還能花 <b className="num">{fmt(b.free)}</b></span><span className="muted">本月 {fmt(freeStart)}</span></div>
+          </>
+        )}
+        <div className="jar-rows">
+          {jars.map((j) => {
+            const bal = balOfJar(app, j.key);
+            const tap = j.key === "dream" && !g ? () => setDreamForm(true) : undefined;
+            const Row: any = tap ? "button" : "div";
+            return (
+              <Row key={j.key} className="jar-row" onClick={tap}>
+                <span className="jar-mini"><JarSVG kind={j.key} pct={fill(j.key)} /></span>
+                <span className="t"><b style={{ color: `var(--${j.key})` }}>{j.name}</b><span className="note">{sub(j.key)}</span></span>
+                <b className="num" style={{ color: bal < 0 ? "var(--warn)" : undefined }}>{fmt(bal)}</b>
+              </Row>
+            );
+          })}
+        </div>
+      </section>
+      <MoveMoney app={app} />
+      {(g || dreamForm) && <DreamCard app={app} />}
+      <StockCard app={app} />
+      <NetWorthCard app={app} />
+      {data.recent.length > 0 && (
+        <section className="card">
+          <button className="card-h fold" onClick={() => setLog(!log)} aria-expanded={log}><h3>罐子進出紀錄</h3><span className="muted small">{log ? "收起" : "展開"}</span></button>
+          {log && (
+            <div className="list">
+              {data.recent.map((e) => (
+                <div className="li" key={e.id}>
+                  <span className="dot" style={{ background: `var(--${e.jar})` }} />
+                  <span className="t">{e.note.replace(/^\d{4} 年 (\d+) 月收入$/, "$1 月零用金入罐")}<br /><span className="d">{jarName(sel, e.jar)} · {shortDate(e.created_at)}</span></span>
+                  <span />
+                  <b className="num" style={{ color: e.amount < 0 ? "var(--warn)" : "var(--ink)" }}>{e.amount > 0 ? "+" : ""}{num(e.amount)}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </>
   );
 }
 
