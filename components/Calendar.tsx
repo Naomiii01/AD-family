@@ -272,7 +272,7 @@ function BookForm({ app, dir, day, past, fromEv, onDone, onCancel }: { app: App;
   const [item, setItem] = useState(fromEv?.title || "");
   const [amt, setAmt] = useState(fromEv?.amount ? String(fromEv.amount) : "");
   const [jar, setJar] = useState("free");
-  const cats = isOut ? catsFor(jar) : INCOME_CATS[sel.role === "kid" ? "kid" : "adult"];
+  const cats = isOut ? catsFor(jar, sel) : INCOME_CATS[sel.role === "kid" ? "kid" : "adult"];
   const [cat, setCat] = useState(cats[0]);
   const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
   const [busy, setBusy] = useState(false);
@@ -302,7 +302,7 @@ function BookForm({ app, dir, day, past, fromEv, onDone, onCancel }: { app: App;
       </div>
       <div className="small muted">{isOut ? "從哪個罐子付" : "放進哪個罐子"}</div>
       <div className="seg" role="group" aria-label="哪個罐子">
-        {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => { setJar(j.key); if (isOut) setCat(catsFor(j.key)[0]); }}>{j.name}</button>)}
+        {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => { setJar(j.key); if (isOut) setCat(catsFor(j.key, sel)[0]); }}>{j.name}</button>)}
       </div>
       <div className="chips" role="group" aria-label="類別">
         {cats.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}

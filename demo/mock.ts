@@ -613,6 +613,37 @@ const F: Record<string, (a: any) => any> = {
     return F.resolve_pending(a);
   },
   log_client_error: () => null,
+  update_expense: ({ p_id, p_item, p_amount, p_category, p_jar, p_pay_method, p_pay_detail, p_type, p_day }) => {
+    const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
+    needAccess(e.member_id);
+    const jar = p_jar || "free", item = String(p_item || "").trim().slice(0, 40);
+    if (!(p_amount > 0)) fail("請輸入金額");
+    if (!item) fail("請寫下買了什麼");
+    if (jar === "dream" || jar === "long") fail("夢想罐和長期罐不能用來付一般花費");
+    if (!db.months.some((m) => m.member_id === e.member_id && m.month === e.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    if (p_amount !== e.amount || jar !== (e.jar || "free")) {
+      log(e.member_id, e.jar || "free", e.amount, "修改：" + e.item, e.month, "refund");
+      log(e.member_id, jar, -p_amount, item, e.month, "expense");
+    }
+    Object.assign(e, { item, amount: p_amount, category: p_category || "其他", jar, pay_method: p_pay_method || "", pay_detail: ["", "cash"].includes(p_pay_method) ? "" : p_pay_detail || "", type: p_type || "" });
+    if (p_day && p_day !== new Date(e.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })) F.set_record_date({ p_kind: "expense", p_id, p_day });
+    return { left: bal(e.member_id, jar), jar_name: jarNm(e.member_id, jar) };
+  },
+  update_income_v2: ({ p_id, p_source, p_category, p_amount, p_split, p_day }) => {
+    const r = db.incomes.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆收入");
+    needAccess(r.member_id);
+    const src = String(p_source || "").trim().slice(0, 40);
+    if (!(p_amount > 0)) fail("請輸入正確的金額");
+    if (!src) fail("請寫下收入來源");
+    const sum = Object.values(p_split as Record<string, number>).reduce((a, b) => a + b, 0);
+    if (sum !== p_amount) fail(`分到各罐的金額加起來要等於 ${p_amount} 元`);
+    if (!db.months.some((m) => m.member_id === r.member_id && m.month === r.month && m.status === "active")) fail("這個月已經結算，不能再修改");
+    const nw = Object.fromEntries(Object.entries(p_split as Record<string, number>).filter(([, v]) => v > 0));
+    for (const [k, v] of Object.entries(r.split) as [string, number][]) log(r.member_id, k, -v, "修改收入：" + r.source, r.month, "income_void");
+    for (const [k, v] of Object.entries(nw) as [string, number][]) log(r.member_id, k, v, "收入：" + src, r.month, "income");
+    Object.assign(r, { source: src, category: p_category || "其他", amount: p_amount, split: nw });
+    if (p_day && p_day !== new Date(r.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })) F.set_record_date({ p_kind: "income", p_id, p_day });
+  },
   rotate_quick_token: () => fail("體驗版不能設定 Apple 捷徑。正式版部署到 Vercel 後就能用。"),
 };
 const todayTW = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });

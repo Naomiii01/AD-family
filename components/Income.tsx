@@ -16,7 +16,7 @@ export function useIncomes(memberId: string, mk: string) {
 }
 
 /** Split an income by this month's jar ratio; non-free jars round down, the free jar takes the remainder. */
-function byRatio(keys: string[], ratio: Record<string, number>, amount: number) {
+export function byRatio(keys: string[], ratio: Record<string, number>, amount: number) {
   const out: Record<string, number> = {};
   let used = 0;
   for (const k of keys) if (k !== "free") { out[k] = Math.floor((amount * (ratio[k] || 0)) / 100); used += out[k]; }

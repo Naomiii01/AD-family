@@ -91,7 +91,7 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
   }, [open, tx, sel.id, isOut]);
 
   const jars = isOut ? spendable(sel) : jarList(sel).filter((j) => j.key !== "long" || sel.role !== "kid");
-  const cats = isOut ? catsFor(jar) : INCOME_CATS[sel.role === "kid" ? "kid" : "adult"];
+  const cats = isOut ? catsFor(jar, sel) : INCOME_CATS[sel.role === "kid" ? "kid" : "adult"];
   const acts: [string, string][] = isOut
     ? [["expense", "記成支出"], ["card", "繳卡費"], ["stock", "買股票"], ["ignore", "不用記"]]
     : [["income", "記成收入"], ["stock", "賣股票"], ["ignore", "不用記"]];
@@ -149,7 +149,7 @@ function PendingRow({ app, tx, rule, open, onOpen, onDone }: { app: App; tx: Tx;
               <label className="f">{isOut ? "付給誰／買了什麼" : "收入來源"}<input id={`pd-item-${tx.id}`} maxLength={40} placeholder={isOut ? `例如：婕樂纖進貨` : "例如：雯婷叫貨"} value={item} onChange={(e) => setItem(e.target.value)} /></label>
               <div className="small muted">{isOut ? "從哪個罐子付" : "放進哪個罐子"}</div>
               <div className="seg" role="group" aria-label="哪個罐子">
-                {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => { setJar(j.key); if (isOut && (j.key === "fixed") !== (jar === "fixed")) setCat(catsFor(j.key)[0]); }}>{j.name}</button>)}
+                {jars.map((j) => <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => { setJar(j.key); if (isOut && (j.key === "fixed") !== (jar === "fixed")) setCat(catsFor(j.key, sel)[0]); }}>{j.name}</button>)}
               </div>
               <div className="chips" role="group" aria-label="類別">
                 {cats.map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}

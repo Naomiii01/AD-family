@@ -5,11 +5,12 @@ import { supabase, rpc } from "@/lib/supabase";
 import { catsFor, payLabel, fmt, num, clamp, curMonth, split, defRatio, mkLabel, shortDate, matchOf, gd, jarList, jarName, spendable } from "@/lib/util";
 import { MonthNav } from "./ui";
 import { WeekCard } from "./Weeks";
-import { IncomeCard } from "./Income";
+import { useIncomes } from "./Income";
 import { Overdraft } from "./Jars";
 import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
+import { Entry, AddFab, DayList, type EditTarget } from "./Entry";
 import { PendingCard } from "./Pending";
 import { Calendar } from "./Calendar";
 
@@ -202,18 +203,10 @@ function Plan({ app }: { app: App }) {
 function Active({ app, mo }: { app: App; mo: any }) {
   const { data, sel, mk, toast } = app;
   const ex = useExpenses(sel.id, mk);
-  const [item, setItem] = useState("");
-  const [amt, setAmt] = useState("");
-  const [type, setType] = useState<"" | "need" | "want">("");
-  const nwOn = sel.need_want !== false;
+  const inc = useIncomes(sel.id, mk);
+  const [sheet, setSheet] = useState<{ edit: EditTarget } | null>(null);
   const [full, setFull] = useState(false);
   const simple = simpleOf(sel) && !full;
-  const [cat, setCat] = useState("飲料點心");
-  const [payJar, setPayJar] = useState("free");
-  const [pay, setPay] = useState<Pay>(() => lastPay(sel.id));
-  const [editPay, setEditPay] = useState<{ id: string; p: Pay; jar: string } | null>(null);
-  const openEdit = (e: any) => setEditPay(editPay?.id === e.id ? null : { id: e.id, p: { m: e.pay_method || "cash", d: e.pay_detail || "" }, jar: e.jar || "free" });
-  const [busy, setBusy] = useState(false);
   const isCur = mk === curMonth();
   const sp = ex.list.reduce((s, e) => s + e.amount, 0);
   const spFree = ex.list.filter((e) => (e.jar || "free") === "free").reduce((s, e) => s + e.amount, 0);
@@ -222,44 +215,11 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const shown = [...jarList(sel).map((j) => j.key).filter((k) => mo.alloc[k] !== undefined),
     ...Object.keys(mo.alloc).filter((k) => !["match", "advance", "bonus", "weeks_ok"].includes(k) && !jarList(sel).some((j) => j.key === k))];
 
-  async function add() {
-    setBusy(true);
-    const [r, e] = await rpc<any>("add_expense_v3", { p_member: sel.id, p_item: item, p_amount: Math.round(+amt), p_type: type, p_category: cat, p_jar: payJar, p_pay_method: pay.m, p_pay_detail: pay.d });
-    setBusy(false);
+  async function del(kind: "expense" | "income", row: any) {
+    const [, e] = await rpc(kind === "expense" ? "delete_expense" : "delete_income", { p_id: row.id });
     if (e) return toast(e);
-    rememberPay(sel.id, pay);
-    toast(r && r.left < 0 ? `記下來了。${r.jar_name || "罐子"}透支 ${fmt(-r.left)}，記得補回來` : "記下來了");
-    setItem("");
-    setAmt("");
-    setType(payJar === "fixed" ? "need" : "");
-    await Promise.all([ex.reload(), data.reload()]);
-  }
-  function pickJar(k: string) {
-    if ((k === "fixed") !== (payJar === "fixed")) {
-      setCat(catsFor(k)[0]);
-      setType(k === "fixed" ? "need" : "");
-    }
-    setPayJar(k);
-  }
-  async function savePay() {
-    if (!editPay) return;
-    const old = ex.list.find((x) => x.id === editPay.id);
-    if (old && (old.jar || "free") !== editPay.jar) {
-      const [, ej] = await rpc("set_expense_jar", { p_id: editPay.id, p_jar: editPay.jar });
-      if (ej) return toast(ej);
-    }
-    const [, e] = await rpc("set_expense_pay", { p_id: editPay.id, p_pay_method: editPay.p.m, p_pay_detail: editPay.p.d });
-    if (e) return toast(e);
-    rememberPay(sel.id, editPay.p);
-    setEditPay(null);
-    toast("已更新");
-    await Promise.all([ex.reload(), data.reload()]);
-  }
-  async function del(id: string) {
-    const [, e] = await rpc("delete_expense", { p_id: id });
-    if (e) return toast(e);
-    toast("已刪除，錢退回原本的罐子");
-    await Promise.all([ex.reload(), data.reload()]);
+    toast(kind === "expense" ? "已刪除，錢退回原本的罐子" : "已刪除這筆收入");
+    await Promise.all([ex.reload(), inc.reload(), data.reload()]);
   }
 
   return (
@@ -289,45 +249,12 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <div className="bar"><span style={{ width: `${pct * 100}%`, background: pct > 0.85 ? "var(--warn)" : "var(--free)" }} /></div>
           {payJars.length > 1 && (
             <div className="row small muted" style={{ gap: 12 }}>
-              {payJars.filter((j) => j.key !== "free").map((j) => <span key={j.key}>{j.name} <b className="num" style={{ color: "var(--ink)" }}>{fmt(data.bal.extras?.[j.key] || 0)}</b></span>)}
+              {payJars.filter((j) => j.key !== "free").map((j) => <span key={j.key}>{j.name} <b className="num" style={{ color: data.bal.extras?.[j.key] < 0 ? "var(--warn)" : "var(--ink)" }}>{fmt(data.bal.extras?.[j.key] || 0)}</b></span>)}
             </div>
-          )}
-          <h3 style={{ marginTop: 6 }}>記一筆花費</h3>
-          {payJars.length > 1 && (
-            <div className="seg" role="group" aria-label="從哪個罐子付">
-              {payJars.map((j) => <button key={j.key} className={payJar === j.key ? "on" : ""} onClick={() => pickJar(j.key)}>{j.name}</button>)}
-            </div>
-          )}
-          <div className="chips" role="group" aria-label="類別">
-            {catsFor(payJar).map((c) => <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
-          </div>
-          {payJar === "fixed" && cat === "卡費" ? (
-            <CardBill app={app} jar={payJar} history={ex.list} onDone={() => ex.reload()} />
-          ) : (
-            <>
-          <div className="grid2">
-            <label className="f">買了什麼<input id="e-item" maxLength={40} placeholder={payJar === "fixed" ? "例如：10月房租" : "例如：手搖飲"} value={item} onChange={(e) => setItem(e.target.value)} /></label>
-            <label className="f">多少錢<input id="e-amt" type="number" inputMode="numeric" min={1} placeholder="60" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
-          </div>
-          <div className="small muted">怎麼付的</div>
-          <PayPicker mid={sel.id} value={pay} onChange={setPay} history={ex.list} />
-          {nwOn && (
-            <div>
-              <div className="small muted">需要還是想要？<span className="note">（可以先不選，月底檢討再補）</span></div>
-              <div className="seg" role="group" aria-label="需要或想要">
-                <button className={type === "need" ? "on" : ""} onClick={() => setType(type === "need" ? "" : "need")}>需要</button>
-                <button className={type === "want" ? "on" : ""} onClick={() => setType(type === "want" ? "" : "want")}>想要</button>
-              </div>
-            </div>
-          )}
-          <button className="btn primary" disabled={busy} onClick={add}>記下來</button>
-            </>
           )}
           {simpleOf(sel) && <button className="link-note" onClick={() => setFull(false)}>切換回簡易記帳</button>}
         </section>
       )}
-      <IncomeCard app={app} mo={mo} canAdd={mo.status === "active" && isCur} onChange={() => {}} />
-      {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}
       {mo.status === "active" && !isCur && (
         <div className="banner warn">
           <span>{mkLabel(mk)} 還沒結算。月份已經過了，請到「檢討」完成結算，才能開始新的月份。</span>
@@ -336,46 +263,18 @@ function Active({ app, mo }: { app: App; mo: any }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h3>本月花費</h3><span className="num muted">共 {fmt(sp)}</span></div>
-        {ex.list.length ? (
-          <div className="list">
-            {ex.list.map((e) => (
-              <div className="li" key={e.id}>
-                <span className="d">{shortDate(e.created_at)}</span>
-                <span className="t">{e.item} {e.type && nwOn && <span className={`tag ${e.type}`}>{e.type === "need" ? "需要" : "想要"}</span>} <span className="note">{e.category}</span>{e.source === "shortcut" && <> <span className="tag shortcut">捷徑</span></>}{e.source === "notify" && <> <span className="tag shortcut">自動</span></>}{e.jar && e.jar !== "free" && <> {mo.status === "active"
-                  ? <button className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }} onClick={() => openEdit(e)}>{jarName(sel, e.jar)}</button>
-                  : <span className="tag" style={{ background: `color-mix(in srgb, var(--${e.jar}) 25%, var(--surface))` }}>{jarName(sel, e.jar)}</span>}</>}
-                  {" "}{mo.status === "active"
-                    ? <button className={`tag pay-${e.pay_method || "none"}`} onClick={() => openEdit(e)} aria-label={`修改 ${e.item} 的罐子或支付方式`}>{payLabel(e) || "＋支付方式"}</button>
-                    : payLabel(e) && <span className={`tag pay-${e.pay_method}`}>{payLabel(e)}</span>}
-                </span>
-                <b className="num">{num(e.amount)}</b>
-                {mo.status === "active" ? <button className="x" onClick={() => del(e.id)} aria-label={`刪除 ${e.item}`}>×</button> : <span />}
-                {editPay?.id === e.id && (
-                  <div className="pay-edit">
-                    {payJars.length > 1 && (
-                      <>
-                        <div className="small muted">從哪個罐子付</div>
-                        <div className="seg" role="group" aria-label="從哪個罐子付">
-                          {payJars.map((j) => <button key={j.key} className={editPay.jar === j.key ? "on" : ""} onClick={() => setEditPay({ ...editPay, jar: j.key })}>{j.name}</button>)}
-                        </div>
-                        <div className="small muted">怎麼付的</div>
-                      </>
-                    )}
-                    <PayPicker mid={sel.id} value={editPay.p} onChange={(p) => setEditPay({ ...editPay, p })} history={ex.list} />
-                    <div className="row" style={{ gap: 8 }}>
-                      <button className="btn sm primary" onClick={savePay}>儲存</button>
-                      <button className="btn sm" onClick={() => setEditPay(null)}>取消</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : <div className="empty">還沒有花費紀錄</div>}
+        <div className="month-sum">
+          <div><span className="b out">支</span><span className="muted small">本月支出</span><b className="num">{fmt(sp)}</b></div>
+          <div><span className="b in">入</span><span className="muted small">其他收入</span><b className="num">{fmt(inc.list.reduce((s, x) => s + x.amount, 0))}</b></div>
+        </div>
+        <DayList app={app} expenses={ex.list} incomes={inc.list} editable={mo.status === "active"}
+          onEdit={(t) => setSheet({ edit: t })} onDelete={del} />
         <PayStats list={ex.list} />
       </section>
+      {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}
       {mo.status === "active" && <button className="btn big" onClick={() => app.go("review")}>月底了，去做檢討 →</button>}
+      {mo.status === "active" && isCur && !simple && <AddFab onClick={() => setSheet({ edit: null })} />}
+      {sheet && <Entry app={app} edit={sheet.edit} onClose={() => setSheet(null)} onSaved={() => { ex.reload(); inc.reload(); }} />}
     </>
   );
 }

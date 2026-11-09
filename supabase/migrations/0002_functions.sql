@@ -595,3 +595,8 @@ alter table public.families add column if not exists guardian text not null defa
 -- migration: client_errors
 -- client_errors(user_id, msg, stack, ua, path); no client read access. log_client_error(...) inserts for auth.uid(),
 --   capped at 30 per user per hour. The app reports uncaught errors and unhandled rejections.
+
+-- migration: edit_records
+-- update_expense(p_id, item, amount, category, jar, pay_method, pay_detail, type, day): edits in place; when amount or jar
+--   changes the ledger gets a refund of the old charge and a new charge. update_income_v2(p_id, source, category, amount,
+--   split, day) does the same for extra income. Both move the record's day via set_record_date.

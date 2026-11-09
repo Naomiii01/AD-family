@@ -1,3 +1,4 @@
+import { ADULT_CATS } from "./cats";
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 export type Jar = "free" | "dream" | "long";
 export const JARS: Jar[] = ["free", "dream", "long"];
@@ -16,8 +17,8 @@ export const INCOME_CATS: Record<"kid" | "adult", string[]> = {
   adult: ["兼職", "業外收入", "獎金", "投資收益", "紅包禮金", "其他"],
 };
 export const FIXED_CATS = ["卡費", "貸款", "房租", "水電瓦斯網路費", "保險費", "電話費", "其他"];
-/** Category chips depend on which jar pays: the 固定支出 jar has its own bill categories. */
-export const catsFor = (jar: string) => (jar === "fixed" ? FIXED_CATS : CATS);
+/** Category choices depend on which jar pays (固定支出 has its own bill categories) and on who is spending. */
+export const catsFor = (jar: string, m?: any) => (jar === "fixed" ? FIXED_CATS : m && m.role !== "kid" ? ADULT_CATS : CATS);
 export const COLORS = ["free", "dream", "long", "sky", "ink"];
 
 export const fmt = (n: number) => "NT$ " + Math.round(n || 0).toLocaleString("zh-TW");
