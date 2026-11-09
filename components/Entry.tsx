@@ -330,7 +330,7 @@ function SwipeRow({ children, actions, open, onOpen, onTap, disabled }: {
     else onTap();
   }
   return (
-    <div className="sw">
+    <div className="swr">
       <div className="sw-acts" style={{ width: ACT_W }} aria-hidden={!open}>{actions}</div>
       <div className="sw-row" style={{ transform: `translateX(${dx}px)`, transition: start.current ? "none" : "transform .2s ease" }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setDx(open ? ACT_W : 0); }}

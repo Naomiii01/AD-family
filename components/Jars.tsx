@@ -3,6 +3,7 @@ import { useLongHistory, ContribBars, RealReturn, avgMonthly } from "./LongReal"
 import { QuickLog, simpleOf } from "./QuickLog";
 import { PendingCard } from "./Pending";
 import { Entry, AddFab } from "./Entry";
+import { NetWorthCard } from "./Assets";
 import { StockCard, useStocks, holdingsOf, stockSummary } from "./Stocks";
 import { useEffect, useState } from "react";
 import type { App } from "./Shell";
@@ -99,6 +100,7 @@ export default function Jars({ app }: { app: App }) {
           </div>
         </section>
       )}
+      {sel.role !== "kid" && <NetWorthCard app={app} />}
       <p className="note center">
         {sel.role === "kid" ? `夢想罐每存滿 ${fmt(family.bonus_step)} 加碼 ${family.bonus_pct}% · 長期罐每月至少 ${fmt(family.long_min)}，${gd(family)}配對 ${family.match_pct}%` : "孩子的加碼和配對規則在「更多 → 罐子使用原則」"}
         {Number(family.rate) > 0 ? ` · 家庭銀行月息 ${Number(family.rate)}%` : ""}

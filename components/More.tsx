@@ -7,9 +7,10 @@ import Rules from "./Rules";
 import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
 import JarManager from "./JarManager";
+import Assets from "./Assets";
 import { simpleOf } from "./QuickLog";
 import { SKINS, SkinKey, skinOf, LOOKS, LookKey, lookOf } from "@/lib/themes";
-import { gd, jarList } from "@/lib/util";
+import { gd, jarList, IS_DEMO } from "@/lib/util";
 
 export default function More({ app }: { app: App }) {
   const { sub, go, isParent, sel, me, isSelf } = app;
@@ -22,7 +23,8 @@ export default function More({ app }: { app: App }) {
       sub === "pin" ? <MyPin app={app} /> :
       sub === "skin" ? <SkinPicker app={app} /> :
       sub === "jars" ? <JarManager app={app} /> :
-      sub === "logset" ? <LogSettings app={app} /> : null;
+      sub === "logset" ? <LogSettings app={app} /> :
+      sub === "assets" ? <Assets app={app} /> : null;
     return (
       <>
         <button className="back" onClick={() => go("more")}>‹ 更多</button>
@@ -36,6 +38,7 @@ export default function More({ app }: { app: App }) {
     ["rules", "則", "long", "罐子使用原則", "三個罐子怎麼用、家庭銀行和夢想加碼"],
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
+  if (sel.role !== "kid") items.unshift(["assets", "產", "long", "我的資產" + who, "現金、銀行、電子支付、信用卡和股票，一次看淨資產"]);
   items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
   items.push(["logset", "帳", "free", "記帳設定" + who, `${simpleOf(sel) ? "簡易記帳" : "完整記帳"} · ${sel.need_want === false ? "不分需要／想要" : "需要／想要月底補標"}`]);
   items.push(["skin", "色", "accent", "畫面風格與配色" + who, `${LOOKS[lookOf(sel)].name} · ${SKINS[skinOf(sel)].name}`]);
@@ -137,8 +140,45 @@ function SkinPicker({ app }: { app: App }) {
           })}
         </div>
       </section>
+      {isSelf && !IS_DEMO && <IconPicker app={app} />}
     </>
   );
+}
+
+const APP_ICONS: [string, string][] = [["sage", "鼠尾草綠"], ["mint", "海鹽薄荷"], ["lavender", "柔霧紫"], ["peach", "蜜桃粉"], ["latte", "奶咖"], ["navy", "灰藍"], ["night", "夜空黑"]];
+/** Home-screen icon: iPhone reads it when the page is added to the home screen, so a change needs re-adding. */
+function IconPicker({ app }: { app: App }) {
+  const [cur, setCur] = useState(() => { try { return localStorage.getItem("adf-icon") || "sage"; } catch { return "sage"; } });
+  function pick(k: string) {
+    setCur(k);
+    try { localStorage.setItem("adf-icon", k); } catch { /* storage unavailable */ }
+    applyAppIcon(k);
+    app.toast("圖示換好了，照下面的步驟重新加到主畫面就會更新");
+  }
+  return (
+    <section className="card">
+      <h2>主畫面圖示</h2>
+      <div className="icon-pick">
+        {APP_ICONS.map(([k, n]) => (
+          <button key={k} className={cur === k ? "on" : ""} onClick={() => pick(k)} aria-pressed={cur === k}>
+            <img src={`/icons/${k}-180.png`} alt="" width={56} height={56} /><span>{n}</span>
+          </button>
+        ))}
+      </div>
+      <p className="note">iPhone 只在「加入主畫面」時讀取圖示：選好後，先長按主畫面上的 My零用錢 刪除（資料不會不見），再用 Safari 打開網站 → 分享 →「加入主畫面」。</p>
+    </section>
+  );
+}
+
+export function applyAppIcon(k?: string) {
+  if (typeof document === "undefined") return;
+  let key = k;
+  if (!key) { try { key = localStorage.getItem("adf-icon") || ""; } catch { key = ""; } }
+  if (!key || key === "sage") return;
+  const href = `/icons/${key}-180.png`;
+  let el = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+  if (!el) { el = document.createElement("link"); el.rel = "apple-touch-icon"; document.head.appendChild(el); }
+  el.href = href;
 }
 
 function LogSettings({ app }: { app: App }) {

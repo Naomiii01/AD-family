@@ -11,6 +11,7 @@ import { QuickLog, simpleOf } from "./QuickLog";
 import { PayPicker, PayStats, lastPay, rememberPay, type Pay } from "./Pay";
 import { CardBill } from "./CardBill";
 import { Entry, AddFab, DayList, type EditTarget } from "./Entry";
+import { BudgetCard } from "./Budget";
 import { PendingCard } from "./Pending";
 import { Calendar } from "./Calendar";
 
@@ -262,6 +263,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
         </div>
       )}
 
+      {sel.role !== "kid" && <BudgetCard app={app} expenses={ex.list} />}
       <section className="card">
         <div className="month-sum">
           <div><span className="b out">支</span><span className="muted small">本月支出</span><b className="num">{fmt(sp)}</b></div>

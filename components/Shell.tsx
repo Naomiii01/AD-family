@@ -9,7 +9,7 @@ import Jars from "./Jars";
 import Month from "./Month";
 import Review from "./Review";
 import Year from "./Year";
-import More from "./More";
+import More, { applyAppIcon } from "./More";
 
 export type App = {
   me: any;
@@ -27,7 +27,7 @@ export type App = {
   sub: string;
 };
 
-const TABS: [string, string][] = [["jars", "罐子"], ["month", "本月"], ["review", "檢討"], ["year", "年度"], ["more", "更多"]];
+const TABS: [string, string][] = [["jars", "罐子"], ["month", "本月"], ["review", "檢討"], ["year", "統計"], ["more", "更多"]];
 
 /** Report uncaught errors so a broken screen on someone's phone can be diagnosed. */
 function useErrorReports() {
@@ -43,6 +43,7 @@ function useErrorReports() {
 
 export default function Shell({ userId }: { userId: string }) {
   useErrorReports();
+  useEffect(() => { applyAppIcon(); }, []);
   const [me, setMe] = useState<any>(null);
   const [family, setFamily] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);

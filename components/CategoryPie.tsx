@@ -7,7 +7,7 @@ const SLOTS = ["var(--c-s1)", "var(--c-s2)", "var(--c-s3)", "var(--c-s4)", "var(
 const OTHER = "var(--c-other)";
 
 /** Donut of where the month's money went, by category, with a legend that carries every number. */
-export function CategoryPie({ list }: { list: { category: string; amount: number }[] }) {
+export function CategoryPie({ list, legend = true }: { list: { category: string; amount: number }[]; legend?: boolean }) {
   const [hi, setHi] = useState<number | null>(null);
   const total = list.reduce((s, e) => s + e.amount, 0);
   if (!total) return null;
@@ -47,7 +47,7 @@ export function CategoryPie({ list }: { list: { category: string; amount: number
         <text x={C} y={C - 4} textAnchor="middle" className="pie-k">{shown ? shown.c : "共花"}</text>
         <text x={C} y={C + 16} textAnchor="middle" className="pie-v">{fmt(shown ? shown.v : total)}</text>
       </svg>
-      <div className="pie-legend">
+      {legend && <div className="pie-legend">
         {parts.map((p, i) => (
           <button key={p.c} className={`pl ${hi === i ? "on" : ""}`} onClick={() => setHi(hi === i ? null : i)} onMouseEnter={() => setHi(i)} onMouseLeave={() => setHi(null)}>
             <i style={{ background: p.color }} />
@@ -56,7 +56,7 @@ export function CategoryPie({ list }: { list: { category: string; amount: number
             <span className="muted pct">{Math.round((p.v / total) * 100)}%</span>
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

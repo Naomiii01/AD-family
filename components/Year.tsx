@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
 import { fmt, clamp, curYear, curMonth } from "@/lib/util";
+import { MonthStats } from "./Stats";
 
 type Ev = { name: string; month: number; amount: number };
 type Plan = { target_long: number; wishes: string; incomes: Ev[]; spends: Ev[]; reflection: string };
@@ -12,6 +13,20 @@ const SUGGEST_IN: Ev[] = [{ name: "過年紅包", month: 2, amount: 0 }, { name:
 const SUGGEST_OUT: Ev[] = [{ name: "家人生日禮物", month: 1, amount: 0 }];
 
 export default function Year({ app }: { app: App }) {
+  const [view, setView] = useState<"month" | "year">(() => { try { return localStorage.getItem("adf-stats-view") === "year" ? "year" : "month"; } catch { return "month"; } });
+  const pick = (v: "month" | "year") => { setView(v); try { localStorage.setItem("adf-stats-view", v); } catch { /* storage unavailable */ } };
+  return (
+    <>
+      <div className="seg" role="group" aria-label="統計範圍">
+        <button className={view === "month" ? "on" : ""} onClick={() => pick("month")}>月統計</button>
+        <button className={view === "year" ? "on" : ""} onClick={() => pick("year")}>年度</button>
+      </div>
+      {view === "month" ? <MonthStats app={app} /> : <YearPlan app={app} />}
+    </>
+  );
+}
+
+function YearPlan({ app }: { app: App }) {
   const { sel, data, toast } = app;
   const [year, setYear] = useState(curYear());
   const [plan, setPlan] = useState<Plan>(BLANK);

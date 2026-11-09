@@ -600,3 +600,10 @@ alter table public.families add column if not exists guardian text not null defa
 -- update_expense(p_id, item, amount, category, jar, pay_method, pay_detail, type, day): edits in place; when amount or jar
 --   changes the ledger gets a refund of the old charge and a new charge. update_income_v2(p_id, source, category, amount,
 --   split, day) does the same for extra income. Both move the record's day via set_record_date.
+
+-- migration: budgets_accounts_skins
+-- cat_budgets(member, category, amount) + set_cat_budget(p_member, p_category, p_amount): monthly limit per category.
+-- accounts(member, name, kind cash|bank|epay|card, balance; cards store debt as negative) + account_log;
+--   save_account(p_id?, p_member, p_name, p_kind, p_balance), transfer_account(p_from, p_to, p_amount, p_note), void_account(p_id).
+--   Accounts track where money sits and never touch jar balances.
+-- members.theme also allows mint, lavender, peach, latte (set_theme updated).

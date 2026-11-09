@@ -10,13 +10,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; events: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; events: Row[]; cat_budgets: Row[]; accounts: Row[]; account_log: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], events: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], events: [], cat_budgets: [], accounts: [], account_log: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -613,6 +613,39 @@ const F: Record<string, (a: any) => any> = {
     return F.resolve_pending(a);
   },
   log_client_error: () => null,
+  set_cat_budget: ({ p_member, p_category, p_amount }) => {
+    needAccess(p_member);
+    if (!(p_amount >= 0)) fail("金額不正確");
+    const ex = db.cat_budgets.find((x) => x.member_id === p_member && x.category === p_category);
+    if (ex) ex.amount = p_amount; else db.cat_budgets.push({ member_id: p_member, category: p_category, amount: p_amount });
+  },
+  save_account: ({ p_id, p_member, p_name, p_kind, p_balance }) => {
+    needAccess(p_member);
+    const name = String(p_name || "").trim().slice(0, 20);
+    if (!name) fail("請寫帳戶名稱");
+    const bal = p_kind === "card" ? -Math.abs(p_balance || 0) : p_balance || 0;
+    if (p_id) {
+      const a = db.accounts.find((x) => x.id === p_id && !x.voided) || fail("找不到這個帳戶");
+      Object.assign(a, { name, kind: p_kind, balance: bal, updated_at: now() });
+      return a.id;
+    }
+    const a = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, name, kind: p_kind, balance: bal, sort: db.accounts.length, voided: false, updated_at: now(), created_at: now() };
+    db.accounts.push(a);
+    return a.id;
+  },
+  transfer_account: ({ p_from, p_to, p_amount }) => {
+    if (p_from === p_to) fail("請選兩個不同的帳戶");
+    if (!(p_amount > 0)) fail("請輸入金額");
+    const a = db.accounts.find((x) => x.id === p_from && !x.voided) || fail("找不到帳戶");
+    const b = db.accounts.find((x) => x.id === p_to && !x.voided) || fail("找不到帳戶");
+    needAccess(a.member_id);
+    a.balance -= p_amount; b.balance += p_amount; a.updated_at = b.updated_at = now();
+  },
+  void_account: ({ p_id }) => {
+    const a = db.accounts.find((x) => x.id === p_id && !x.voided) || fail("找不到這個帳戶");
+    needAccess(a.member_id);
+    a.voided = true;
+  },
   update_expense: ({ p_id, p_item, p_amount, p_category, p_jar, p_pay_method, p_pay_detail, p_type, p_day }) => {
     const e = db.expenses.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆花費");
     needAccess(e.member_id);
