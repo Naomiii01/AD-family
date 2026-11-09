@@ -218,6 +218,15 @@ function Active({ app, mo }: { app: App; mo: any }) {
   const shown = [...jarList(sel).map((j) => j.key).filter((k) => mo.alloc[k] !== undefined),
     ...Object.keys(mo.alloc).filter((k) => !["match", "advance", "bonus", "weeks_ok"].includes(k) && !jarList(sel).some((j) => j.key === k))];
 
+  async function copy(kind: "expense" | "income", r: any) {
+    const [, e] = kind === "expense"
+      ? await rpc("add_expense_v3", { p_member: sel.id, p_item: r.item, p_amount: r.amount, p_type: r.type || "", p_category: r.category, p_jar: r.jar || "free", p_pay_method: r.pay_method || "", p_pay_detail: r.pay_detail || "" })
+      : await rpc("add_income", { p_member: sel.id, p_source: r.source, p_category: r.category, p_amount: r.amount, p_split: r.split });
+    if (e) return toast(e);
+    toast(`已複製「${kind === "expense" ? r.item : r.source}」到今天`);
+    await Promise.all([ex.reload(), inc.reload(), data.reload()]);
+  }
+
   async function del(kind: "expense" | "income", row: any) {
     const [, e] = await rpc(kind === "expense" ? "delete_expense" : "delete_income", { p_id: row.id });
     if (e) return toast(e);
@@ -272,7 +281,7 @@ function Active({ app, mo }: { app: App; mo: any }) {
           <div><span className="b in">入</span><span className="muted small">其他收入</span><b className="num">{fmt(inc.list.reduce((s, x) => s + x.amount, 0))}</b></div>
         </div>
         <DayList app={app} expenses={ex.list} incomes={inc.list} editable={mo.status === "active"}
-          onEdit={(t) => setSheet({ edit: t })} onDelete={del} />
+          onEdit={(t) => setSheet({ edit: t })} onDelete={del} onCopy={isCur ? copy : undefined} />
         <PayStats list={ex.list} />
       </section>
       {mo.status === "active" && isCur && <WeekCard key={ex.list.length} app={app} mk={mk} />}

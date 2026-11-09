@@ -395,6 +395,7 @@ i.b,span.b{display:inline-grid;place-items:center;font-style:normal;font-size:.7
 .swr{position:relative;border-top:1px solid var(--line);overflow:hidden}
 .swr:first-child{border-top:0}
 .sw-acts{position:absolute;left:0;top:0;bottom:0;display:flex}
+.sw-copy{background:var(--c-s4)}
 .sw-acts button{flex:1;border:0;color:#fff;font:inherit;font-weight:800;font-size:.85rem;cursor:pointer;line-height:1.2}
 .sw-edit{background:var(--accent)}
 .sw-del{background:var(--warn)}

@@ -232,9 +232,11 @@ export function AddFab({ onClick, onVoice }: { onClick: () => void; onVoice?: ()
 }
 
 /** Records grouped by day, newest first; swipe a row to the right (or tap it) to edit or delete. */
-export function DayList({ app, expenses, incomes, editable, onEdit, onDelete }: {
+export function DayList({ app, expenses, incomes, editable, onEdit, onDelete, onCopy }: {
   app: App; expenses: any[]; incomes: any[]; editable: boolean;
   onEdit: (t: EditTarget) => void; onDelete: (kind: "expense" | "income", row: any) => void;
+  /** Copy a record to today; left out when the month shown isn't this month. */
+  onCopy?: (kind: "expense" | "income", row: any) => void;
 }) {
   const { sel } = app;
   const nwOn = sel.need_want !== false;
@@ -267,10 +269,11 @@ export function DayList({ app, expenses, incomes, editable, onEdit, onDelete }: 
           </div>
           <div className="day-card">
             {g.items.map(({ kind, r }) => (
-              <SwipeRow key={r.id} open={openId === r.id} disabled={!editable} onOpen={(v) => { setOpenId(v ? r.id : null); setConfirm(null); }}
+              <SwipeRow key={r.id} wide={!!onCopy} open={openId === r.id} disabled={!editable} onOpen={(v) => { setOpenId(v ? r.id : null); setConfirm(null); }}
                 actions={
                   <>
                     <button className="sw-edit" onClick={() => { setOpenId(null); onEdit({ kind, row: r }); }}>編輯</button>
+                    {onCopy && <button className="sw-copy" onClick={() => { setOpenId(null); onCopy(kind, r); }}>複製</button>}
                     {confirm === r.id
                       ? <button className="sw-del" onClick={() => { setOpenId(null); setConfirm(null); onDelete(kind, r); }}>確定<br />刪除</button>
                       : <button className="sw-del" onClick={() => setConfirm(r.id)}>刪除</button>}
@@ -302,47 +305,68 @@ export function DayList({ app, expenses, incomes, editable, onEdit, onDelete }: 
           </div>
         </div>
       ))}
-      {editable && <p className="note center">往右滑一筆可以編輯或刪除，點一下也能編輯。</p>}
+      {editable && <p className="note center">往右滑一筆可以{onCopy ? "編輯、複製到今天或刪除" : "編輯或刪除"}，點一下也能編輯。</p>}
     </div>
   );
 }
 
-const ACT_W = 132;
-function SwipeRow({ children, actions, open, onOpen, onTap, disabled }: {
-  children: React.ReactNode; actions: React.ReactNode; open: boolean; onOpen: (v: boolean) => void; onTap: () => void; disabled?: boolean;
+/** A record row that slides right to show its actions. Touch uses native listeners (iOS Safari
+ *  cancels pointer events once it starts a pan), the mouse uses pointer events. */
+function SwipeRow({ children, actions, open, onOpen, onTap, disabled, wide }: {
+  children: React.ReactNode; actions: React.ReactNode; open: boolean; onOpen: (v: boolean) => void; onTap: () => void; disabled?: boolean; wide?: boolean;
 }) {
+  const W = wide ? 198 : 132;
   const [dx, setDx] = useState(0);
-  const start = useRef<{ x: number; y: number; base: number; locked: "" | "x" | "y" } | null>(null);
-  const moved = useRef(false);
-  useEffect(() => { setDx(open ? ACT_W : 0); }, [open]);
-  function down(e: React.PointerEvent) {
-    if (disabled) return;
-    start.current = { x: e.clientX, y: e.clientY, base: open ? ACT_W : 0, locked: "" };
-    moved.current = false;
-  }
-  function move(e: React.PointerEvent) {
-    const s = start.current;
-    if (!s) return;
-    const mx = e.clientX - s.x, my = e.clientY - s.y;
-    if (!s.locked) { if (Math.abs(mx) > 8 || Math.abs(my) > 8) s.locked = Math.abs(mx) > Math.abs(my) ? "x" : "y"; else return; }
-    if (s.locked !== "x") return;
-    moved.current = true;
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    setDx(Math.max(0, Math.min(ACT_W + 24, s.base + mx)));
-  }
-  function up() {
-    const s = start.current;
-    start.current = null;
-    if (!s) return;
-    if (moved.current) { const o = dx > ACT_W / 2; setDx(o ? ACT_W : 0); onOpen(o); }
-    else if (open) onOpen(false);
-    else onTap();
-  }
+  const [drag, setDrag] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const st = useRef<{ x: number; y: number; base: number; locked: "" | "x" | "y"; dx: number } | null>(null);
+  const last = useRef({ open, onOpen, onTap, disabled, W });
+  last.current = { open, onOpen, onTap, disabled, W };
+  useEffect(() => { setDx(open ? W : 0); }, [open, W]);
+
+  useEffect(() => {
+    const el = ref.current!;
+    const begin = (x: number, y: number) => { if (last.current.disabled) return; const b = last.current.open ? last.current.W : 0; st.current = { x, y, base: b, locked: "", dx: b }; };
+    const step = (x: number, y: number, ev?: Event) => {
+      const s = st.current; if (!s) return;
+      const mx = x - s.x, my = y - s.y;
+      if (!s.locked) { if (Math.abs(mx) < 8 && Math.abs(my) < 8) return; s.locked = Math.abs(mx) > Math.abs(my) ? "x" : "y"; if (s.locked === "x") setDrag(true); }
+      if (s.locked !== "x") return;
+      if (ev && ev.cancelable) ev.preventDefault();
+      s.dx = Math.max(0, Math.min(last.current.W + 30, s.base + mx));
+      setDx(s.dx);
+    };
+    const end = () => {
+      const s = st.current; st.current = null; setDrag(false);
+      if (!s) return;
+      const L = last.current;
+      if (s.locked === "x") { const o = s.dx > L.W / 2; setDx(o ? L.W : 0); L.onOpen(o); }
+      else if (!s.locked) { if (L.open) L.onOpen(false); else L.onTap(); }
+    };
+    const ts = (e: TouchEvent) => begin(e.touches[0].clientX, e.touches[0].clientY);
+    const tm = (e: TouchEvent) => step(e.touches[0].clientX, e.touches[0].clientY, e);
+    const te = (e: TouchEvent) => { e.preventDefault(); end(); };
+    const tc = () => { st.current = null; setDrag(false); setDx(last.current.open ? last.current.W : 0); };
+    const pd = (e: PointerEvent) => { if (e.pointerType === "mouse") begin(e.clientX, e.clientY); };
+    const pm = (e: PointerEvent) => { if (e.pointerType === "mouse") step(e.clientX, e.clientY); };
+    const pu = (e: PointerEvent) => { if (e.pointerType === "mouse") end(); };
+    el.addEventListener("touchstart", ts, { passive: true });
+    el.addEventListener("touchmove", tm, { passive: false });
+    el.addEventListener("touchend", te);
+    el.addEventListener("touchcancel", tc);
+    el.addEventListener("pointerdown", pd);
+    window.addEventListener("pointermove", pm);
+    window.addEventListener("pointerup", pu);
+    return () => {
+      el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("touchcancel", tc);
+      el.removeEventListener("pointerdown", pd); window.removeEventListener("pointermove", pm); window.removeEventListener("pointerup", pu);
+    };
+  }, []);
+
   return (
     <div className="swr">
-      <div className="sw-acts" style={{ width: ACT_W }} aria-hidden={!open}>{actions}</div>
-      <div className="sw-row" style={{ transform: `translateX(${dx}px)`, transition: start.current ? "none" : "transform .2s ease" }}
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { start.current = null; setDx(open ? ACT_W : 0); }}
+      <div className="sw-acts" style={{ width: W }} aria-hidden={!open}>{actions}</div>
+      <div ref={ref} className="sw-row" style={{ transform: `translateX(${dx}px)`, transition: drag ? "none" : "transform .2s ease" }}
         role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onTap(); }}>
         {children}
       </div>
