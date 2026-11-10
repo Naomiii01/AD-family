@@ -611,3 +611,11 @@ alter table public.families add column if not exists guardian text not null defa
 --   voice_add(p_token, p_items jsonb) — service role only. Resolves the member by quick_hash, then for each item
 --   calls add_expense_v3 (source 'voice') or add_income (jar = where that income category went last time, else free),
 --   and set_record_date for 昨天/前天 within the same month. Returns {name, items, free}.
+
+-- Spending moves 我的資產 too: expenses.account_id + trigger expense_acc_sync.
+-- _acc_for(member, pay_method, pay_detail) matches the payment to an account by name
+-- (cash → the cash account; card / Apple Pay·銀行 → that bank's card; transfer / epay → a non-card account
+--  whose name matches, 中信=中國信託, 國泰=國泰世華). Insert lowers the balance (card debt grows), edits re-apply,
+-- voiding gives it back. 卡費 rows are skipped: 繳卡費 settles the card and bank itself.
+alter table expenses add column if not exists account_id uuid references accounts(id);
+-- (functions _acc_norm, _acc_for, _expense_acc_sync and trigger expense_acc_sync as deployed 2026-11-10)
