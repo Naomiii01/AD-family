@@ -52,7 +52,7 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
   const [day, setDay] = useState<string>(er ? dayOf(er.created_at) : today);
   const [pay, setPay] = useState<Pay>(() => (er && edit!.kind === "expense" ? { m: er.pay_method || "cash", d: er.pay_detail || "" } : lastPay(sel.id)));
   const [type, setType] = useState<"" | "need" | "want">(er?.type || "");
-  const [panel, setPanel] = useState<"" | "pay">("");
+  const [panel, setPanel] = useState<"" | "pay" | "jar">("");
   const [from, setFrom] = useState("free");
   const [to, setTo] = useState(() => jarList(sel).find((j) => j.key !== "free")?.key || "free");
   const [busy, setBusy] = useState(false);
@@ -70,7 +70,10 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  const amount = evalExpr(expr);
+  const typed = evalExpr(expr);
+  // A number typed into the note box with the phone keyboard counts as the amount.
+  const noteNum = /^\s*\d[\d,]*\s*(元)?\s*$/.test(note) ? +note.replace(/[^\d]/g, "") : 0;
+  const amount = typed > 0 ? typed : noteNum;
   const monthStart = `${curMonth()}-01`;
   const billMode = tab === "out" && jar === "fixed" && cat === "卡費" && !edit;
 
@@ -96,7 +99,7 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
       const [, e] = await rpc("move_money", { p_member: sel.id, p_from: from, p_to: to, p_amount: amount });
       err = e; msg = `已從${jarName(sel, from)}移 ${fmt(amount)} 到${jarName(sel, to)}`;
     } else if (tab === "out") {
-      const item = note.trim() || cat;
+      const item = (noteNum && !(typed > 0) ? "" : note.trim()) || cat;
       if (edit) {
         const [, e] = await rpc("update_expense", { p_id: er.id, p_item: item, p_amount: amount, p_category: cat, p_jar: jar, p_pay_method: pay.m, p_pay_detail: pay.d, p_type: type, p_day: day });
         err = e; msg = "改好了";
@@ -108,7 +111,7 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
       }
       if (!err) rememberPay(sel.id, pay);
     } else {
-      const src = note.trim() || cat;
+      const src = (noteNum && !(typed > 0) ? "" : note.trim()) || cat;
       const split = jar === "ratio" ? byRatio(jarList(sel).map((j) => j.key), mo?.ratio || {}, amount) : { [jar]: amount };
       if (edit) {
         const [, e] = await rpc("update_income_v2", { p_id: er.id, p_source: src, p_category: cat, p_amount: amount, p_split: split, p_day: day });
@@ -141,7 +144,7 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
       <div className="sheet">
         <div className="sheet-top">
           <div className="sheet-tabs">
-            {tabs.map(([k, n]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{n}</button>)}
+            {tabs.map(([k, n]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => { setTab(k); setPanel(""); }}>{n}</button>)}
           </div>
           <button className="x" onClick={onClose} aria-label="關閉">×</button>
         </div>
@@ -153,6 +156,18 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
             <div className="small muted">移到哪個罐子</div>
             <div className="seg">{jarList(sel).filter((j) => j.key !== from).map((j) => <button key={j.key} className={to === j.key ? "on" : ""} onClick={() => setTo(j.key)}>{j.name}</button>)}</div>
             <p className="note">投資罐、長期罐的錢只進不出；{isKid ? `夢想罐要${gd(family)}同意才能移出。` : "從夢想罐移出會記成挪用。"}</p>
+          </div>
+        ) : panel === "jar" ? (
+          <div className="sheet-body">
+            <div className="small muted">{tab === "in" ? "放進哪個罐子" : "從哪個罐子付"}</div>
+            <div className="jar-pick">
+              {jarOpts.map((j) => (
+                <button key={j.key} className={jar === j.key ? "on" : ""} onClick={() => { setJar(j.key); setPanel(""); }}>
+                  <b style={j.key !== "ratio" ? { color: `var(--${j.key})` } : undefined}>{j.name}</b>
+                  <span className="note">{j.key === "ratio" ? "照月初比例分到各罐" : fmt(balOfJar(app, j.key))}</span>
+                </button>
+              ))}
+            </div>
           </div>
         ) : panel === "pay" ? (
           <div className="sheet-body">
@@ -182,11 +197,9 @@ export function Entry({ app, edit, startTab = "out", onClose, onSaved }: { app: 
                   <input type="date" value={day} min={monthStart} max={today} disabled={isKid} onChange={(e) => e.target.value && setDay(e.target.value)} aria-label="日期" />
                   <span>{day === today ? "今天" : `${+day.slice(5, 7)}/${+day.slice(8)}`}</span>
                 </label>
-                <label className="schip">🫙
-                  <select value={jar} onChange={(e) => setJar(e.target.value)} aria-label={tab === "in" ? "放進哪個罐子" : "從哪個罐子付"}>
-                    {jarOpts.map((j) => <option key={j.key} value={j.key}>{j.name}</option>)}
-                  </select>
-                </label>
+                <button className="schip" onClick={() => setPanel("jar")} aria-label={tab === "in" ? "放進哪個罐子" : "從哪個罐子付"}>
+                  🫙 <span>{tab === "in" ? "放進" : ""}{jarOpts.find((j) => j.key === jar)?.name || "自由罐"}</span><span className="caret" aria-hidden="true">▾</span>
+                </button>
                 {tab === "out" && <button className="schip" onClick={() => setPanel("pay")}>💳 <span>{payLabel({ pay_method: pay.m, pay_detail: pay.d }) || "現金"}</span></button>}
                 {tab === "out" && nwOn && (
                   <button className={`schip ${type ? "on" : ""}`} onClick={() => setType(type === "" ? "need" : type === "need" ? "want" : "")}>
