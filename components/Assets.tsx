@@ -110,7 +110,7 @@ export default function Assets({ app }: { app: App }) {
       {w.acc.loaded && !w.acc.list.length && form !== "add" && (
         <p className="note">建議先加：現金、常用的銀行帳戶、LINE Pay，還有每張信用卡（填目前欠多少）。之後每隔一陣子點帳戶校正一次餘額就好。</p>
       )}
-      <p className="note">資產帳戶是看「錢放在哪裡」，跟罐子（錢打算怎麼用）分開記，不會影響罐子的金額。繳卡費時，用「轉帳」從銀行轉到信用卡，信用卡欠款就會減少。</p>
+      <p className="note">資產帳戶是看「錢放在哪裡」，跟罐子（錢打算怎麼用）分開記，不會影響罐子的金額。繳卡費時，到「記一筆 → 支出 → 固定支出 → 卡費」記一次就好：罐子扣錢、信用卡欠款減少、銀行餘額扣掉，會一起處理。</p>
     </>
   );
 }
@@ -181,7 +181,7 @@ function MoveForm({ app, list, onDone }: { app: App; list: Acc[]; onDone: () => 
         <label className="f">金額<input id="mv-amt" type="number" inputMode="numeric" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
         <label className="f">備註（可不填）<input id="mv-note" maxLength={40} placeholder={toCard ? "例如：11月卡費" : ""} value={note} onChange={(e) => setNote(e.target.value)} /></label>
       </div>
-      {toCard && <p className="note">轉到信用卡＝繳卡費：信用卡欠款會減少。罐子那邊請照平常用「繳卡費」記。</p>}
+      {toCard && <p className="note">繳卡費建議改用「記一筆 → 固定支出 → 卡費」，罐子和資產會一起更新；在這裡轉只會改資產，不會動到罐子。</p>}
       <div className="row" style={{ gap: 8 }}>
         <button className="btn primary" disabled={busy || !to || !(+amt > 0)} onClick={save}>記下轉帳</button>
         <button className="btn" onClick={onDone}>取消</button>

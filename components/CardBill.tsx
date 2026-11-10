@@ -4,6 +4,7 @@ import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
 import { fmt, num, shortDate } from "@/lib/util";
 import { PayPicker, cardBanks, type Pay } from "./Pay";
+import { useAccounts } from "./Assets";
 
 /** A swipe counts toward a card when it was paid with that card, directly or through Apple Pay. */
 const onCard = (e: any, bank: string) =>
@@ -24,6 +25,9 @@ export function CardBill({ app, jar, history, onDone, initialBill }: { app: App;
   const [pay, setPay] = useState<Pay>({ m: "transfer", d: "" });
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
+  // The asset side: lower the card's debt in 我的資產 and (optionally) take it from a bank account.
+  const acc = useAccounts(sel.id);
+  const [fromAcc, setFromAcc] = useState<string>(() => { try { return localStorage.getItem(`adf-billfrom-${sel.id}`) || ""; } catch { return ""; } });
 
   useEffect(() => {
     const since = new Date(Date.now() - 120 * 864e5).toISOString();
@@ -40,6 +44,10 @@ export function CardBill({ app, jar, history, onDone, initialBill }: { app: App;
   const billN = Math.max(0, Math.round(+bill) || 0);
   const logged = [...mine, ...unsure].filter((e) => picked.has(e.id)).reduce((s, e) => s + e.amount, 0);
   const rest = billN - logged;
+  const cardAcc = bank ? acc.list.find((a) => a.kind === "card" && a.name.includes(bank)) : undefined;
+  const banksAcc = acc.list.filter((a) => a.kind !== "card");
+  const fromOk = banksAcc.some((a) => a.id === fromAcc) ? fromAcc : "";
+  useEffect(() => { if (cardAcc && !bill && cardAcc.balance < 0) setBill(String(-cardAcc.balance)); }, [cardAcc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   async function payIt() {
@@ -49,6 +57,15 @@ export function CardBill({ app, jar, history, onDone, initialBill }: { app: App;
     });
     setBusy(false);
     if (e) return toast(e);
+    if (cardAcc) {
+      const note = `${new Date().getMonth() + 1}月${bank}卡費`;
+      const [, e2] = fromOk
+        ? await rpc("transfer_account", { p_from: fromOk, p_to: cardAcc.id, p_amount: billN, p_note: note })
+        : await rpc("save_account", { p_id: cardAcc.id, p_member: sel.id, p_name: cardAcc.name, p_kind: "card", p_balance: Math.max(0, -cardAcc.balance - billN) });
+      if (e2) toast(`罐子記好了，但資產沒更新：${e2}`);
+      try { localStorage.setItem(`adf-billfrom-${sel.id}`, fromOk); } catch { /* private mode */ }
+      acc.reload();
+    }
     toast(r.charged > 0
       ? `繳好了：${bank}帳單 ${fmt(r.bill)}，${r.logged ? `其中 ${fmt(r.logged)} 已經記過，` : ""}從${r.jar_name || "固定支出"}扣 ${fmt(r.charged)}`
       : `繳好了：${bank}帳單的 ${fmt(r.bill)} 都已經一筆一筆記過，不用再扣錢`);
@@ -98,6 +115,15 @@ export function CardBill({ app, jar, history, onDone, initialBill }: { app: App;
           )}
           <div className="small muted">怎麼繳的</div>
           <PayPicker mid={sel.id} value={pay} onChange={setPay} history={history} />
+          {cardAcc && (
+            <>
+              <div className="small muted">從哪個帳戶繳<span className="note">（我的資產裡的「{cardAcc.name}」欠款 {fmt(Math.max(0, -cardAcc.balance))}，繳完會自動減掉）</span></div>
+              <div className="chips" role="group" aria-label="從哪個帳戶繳">
+                {banksAcc.map((a) => <button key={a.id} className={`chip ${fromOk === a.id ? "on" : ""}`} onClick={() => setFromAcc(a.id)}>{a.name}</button>)}
+                <button className={`chip ${!fromOk ? "on" : ""}`} onClick={() => setFromAcc("")}>不扣帳戶，只減欠款</button>
+              </div>
+            </>
+          )}
           <button className="btn primary" disabled={busy || billN <= 0 || rest < 0} onClick={payIt}>繳卡費</button>
         </>
       )}
