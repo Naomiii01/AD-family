@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
 import { fmt, num } from "@/lib/util";
-import { useStocks, holdingsOf, tradeOrder, TradeForm, NoteFields, noteOf, saveNote, STYLES, type Trade, type NoteVals } from "./Stocks";
+import { useStocks, holdingsOf, tradeOrder, TradeForm, NoteFields, noteOf, saveNote, STYLES, brokersOf, type Trade, type NoteVals } from "./Stocks";
 
 // 小財怪投資成長紀錄: every trade with its type, reason and planned prices, and how the gains add up over time.
 // Taiwan convention on this page: up / gain is red, down / loss is green.
@@ -21,7 +21,7 @@ function pnlOf(trades: Trade[]) {
   const by: Record<string, Pnl> = {};
   const daily: Record<string, number> = {};
   for (const t of [...trades].sort(tradeOrder)) {
-    const p = (pos[t.symbol] ||= { sh: 0, cost: 0 });
+    const p = (pos[`${t.broker || ""}|${t.symbol}`] ||= { sh: 0, cost: 0 });
     if (t.side === "buy") { p.cost += t.shares * Number(t.price) + t.fee; p.sh += t.shares; continue; }
     const avg = p.sh ? p.cost / p.sh : 0;
     const base = avg * t.shares;
@@ -38,8 +38,12 @@ function pnlOf(trades: Trade[]) {
 export default function Xiaocai({ app }: { app: App }) {
   const { sel, toast, data } = app;
   const st = useStocks(sel.id);
-  const h = useMemo(() => holdingsOf(st.trades, st.prices), [st.trades, st.prices]);
-  const { by, curve } = useMemo(() => pnlOf(st.trades), [st.trades]);
+  const [acct, setAcct] = useState("全部");
+  // Everything below follows the chosen broker account.
+  const trades = useMemo(() => (acct === "全部" ? st.trades : st.trades.filter((t) => (t.broker || "") === acct)), [st.trades, acct]);
+  const h = useMemo(() => holdingsOf(trades, st.prices), [trades, st.prices]);
+  const { by, curve } = useMemo(() => pnlOf(trades), [trades]);
+  const brokers = brokersOf(st.trades);
   const [filter, setFilter] = useState("全部");
   const [open, setOpen] = useState<string | null>(null);
   const [form, setForm] = useState(false);
@@ -61,7 +65,7 @@ export default function Xiaocai({ app }: { app: App }) {
   // Which kind of trading actually makes money.
   const styleStats = useMemo(() => {
     const m: Record<string, { n: number; gain: number; win: number; sells: number }> = {};
-    for (const t of st.trades) {
+    for (const t of trades) {
       const k = t.style || "未分類";
       const s = (m[k] ||= { n: 0, gain: 0, win: 0, sells: 0 });
       s.n++;
@@ -69,32 +73,35 @@ export default function Xiaocai({ app }: { app: App }) {
       if (p) { s.gain += p.gain; s.sells++; if (p.gain > 0) s.win++; }
     }
     return Object.entries(m).sort((a, b) => b[1].gain - a[1].gain);
-  }, [st.trades, by]);
+  }, [trades, by]);
 
   // Holdings measured against the stop / take-profit / target set on their latest buy.
   const alerts = useMemo(() => held.map((x) => {
-    const plan = [...st.trades].filter((t) => t.symbol === x.symbol && t.side === "buy" && (t.stop_loss || t.take_profit || t.target)).sort(tradeOrder).pop();
+    const plan = [...trades].filter((t) => t.symbol === x.symbol && t.side === "buy" && (t.stop_loss || t.take_profit || t.target)).sort(tradeOrder).pop();
     if (!plan || x.price == null) return null;
     const p = x.price, stop = Number(plan.stop_loss) || 0, take = Number(plan.take_profit) || 0, target = Number(plan.target) || 0;
     const hit = stop && p <= stop ? ["跌破停損", DOWN] : target && p >= target ? ["到目標價", UP] : take && p >= take ? ["到停利價", UP] : null;
     return { x, p, stop, take, target, hit };
-  }).filter(Boolean) as { x: (typeof held)[number]; p: number; stop: number; take: number; target: number; hit: string[] | null }[], [held, st.trades]);
+  }).filter(Boolean) as { x: (typeof held)[number]; p: number; stop: number; take: number; target: number; hit: string[] | null }[], [held, trades]);
 
-  const shown = [...st.trades].sort(tradeOrder).reverse().filter((t) => filter === "全部" || (filter === "未分類" ? !t.style : t.style === filter));
+  const shown = [...trades].sort(tradeOrder).reverse().filter((t) => filter === "全部" || (filter === "未分類" ? !t.style : t.style === filter));
   const groups: [string, Trade[]][] = [];
   for (const t of shown) {
     const k = `${t.traded_on.slice(0, 4)} 年 ${+t.traded_on.slice(5, 7)} 月`;
     if (!groups.length || groups[groups.length - 1][0] !== k) groups.push([k, []]);
     groups[groups.length - 1][1].push(t);
   }
-  const usedStyles = ["全部", ...STYLES.filter((k) => st.trades.some((t) => t.style === k)), ...(st.trades.some((t) => !t.style) ? ["未分類"] : [])];
+  const usedStyles = ["全部", ...STYLES.filter((k) => trades.some((t) => t.style === k)), ...(trades.some((t) => !t.style) ? ["未分類"] : [])];
 
   return (
     <div className="xc">
+      <div className="seg xc-acct" role="group" aria-label="券商帳戶">
+        {["全部", ...brokers].map((b) => <button key={b} className={acct === b ? "on" : ""} onClick={() => setAcct(b)}>{b === "全部" ? "全部帳戶" : b}</button>)}
+      </div>
       <section className="xc-hero">
         <Monster happy={realized + unreal >= 0} />
         <div className="xc-hero-t">
-          <div className="xc-cap">小財怪投資成長紀錄</div>
+          <div className="xc-cap">小財怪投資成長紀錄{acct !== "全部" ? `・${acct}` : ""}</div>
           <div className="xc-label">已實現損益</div>
           <div className="xc-big" style={{ color: realized >= 0 ? "var(--xc-gold-hi)" : "var(--xc-down-hi)" }}>{signed(Math.round(realized))}</div>
         </div>
@@ -109,7 +116,7 @@ export default function Xiaocai({ app }: { app: App }) {
       {form && (
         <section className="card">
           <h3>記一筆交易</h3>
-          <TradeForm app={app} st={st} holdings={h.list} withNote onClose={() => setForm(false)} />
+          <TradeForm app={app} st={st} holdings={h.list} withNote defaultBroker={acct !== "全部" ? acct : undefined} onClose={() => setForm(false)} />
         </section>
       )}
 
@@ -162,7 +169,7 @@ export default function Xiaocai({ app }: { app: App }) {
           <div key={g} className="xc-group">
             <div className="xc-month">{g}</div>
             {list.map((t) => (
-              <TradeRow key={t.id} t={t} pnl={by[t.id]} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)}
+              <TradeRow key={t.id} t={t} brokers={brokers} showBroker={acct === "全部"} pnl={by[t.id]} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)}
                 onSaved={async () => { setOpen(null); await st.reload(); }}
                 onDelete={async () => {
                   const [, e] = await rpc("void_stock_trade", { p_id: t.id });
@@ -180,15 +187,17 @@ export default function Xiaocai({ app }: { app: App }) {
   );
 }
 
-function TradeRow({ t, pnl, open, onToggle, onSaved, onDelete, app }: { t: Trade; pnl?: Pnl; open: boolean; onToggle: () => void; onSaved: () => void; onDelete: () => void; app: App }) {
+function TradeRow({ t, pnl, open, onToggle, onSaved, onDelete, app, brokers, showBroker }: { t: Trade; pnl?: Pnl; brokers: string[]; showBroker: boolean; open: boolean; onToggle: () => void; onSaved: () => void; onDelete: () => void; app: App }) {
   const [v, setV] = useState<NoteVals>(noteOf(t));
   const [busy, setBusy] = useState(false);
   const [sure, setSure] = useState(false);
-  useEffect(() => { if (open) { setV(noteOf(t)); setSure(false); } }, [open, t]);
+  const [bk, setBk] = useState(t.broker || "");
+  useEffect(() => { if (open) { setV(noteOf(t)); setSure(false); setBk(t.broker || ""); } }, [open, t]);
   const buy = t.side === "buy";
   async function save() {
     setBusy(true);
-    const [, e] = await saveNote(t.id, v);
+    let [, e] = await saveNote(t.id, v);
+    if (!e && bk !== (t.broker || "")) [, e] = await rpc("set_trade_broker", { p_id: t.id, p_broker: bk });
     setBusy(false);
     if (e) return app.toast(e);
     app.toast("記好了");
@@ -201,7 +210,7 @@ function TradeRow({ t, pnl, open, onToggle, onSaved, onDelete, app }: { t: Trade
         <span className={`xc-side ${buy ? "buy" : "sell"}`}>{buy ? "買" : "賣"}</span>
         <span className="xc-mid">
           <span className="xc-name"><b>{t.name || t.symbol}</b> <span className="note">{t.symbol}</span>{t.style && <span className="xc-tag">{t.style}</span>}</span>
-          <span className="note">{num(t.shares)} 股 @ {Number(t.price)}{t.jar === "none" ? " · 以前買的" : ""}</span>
+          <span className="note">{showBroker && t.broker ? `${t.broker} · ` : ""}{num(t.shares)} 股 @ {Number(t.price)}{t.jar === "none" ? " · 以前買的" : ""}</span>
           {t.reason && <span className="xc-reason">{t.reason}</span>}
           {buy && (t.stop_loss || t.take_profit || t.target) ? (
             <span className="xc-plan">
@@ -218,6 +227,10 @@ function TradeRow({ t, pnl, open, onToggle, onSaved, onDelete, app }: { t: Trade
       </button>
       {open && (
         <div className="xc-edit">
+          <div className="row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="small muted">券商帳戶</span>
+            <div className="chips" role="group" aria-label="券商帳戶">{brokers.map((b) => <button key={b} className={`chip ${bk === b ? "on" : ""}`} onClick={() => setBk(b)}>{b}</button>)}</div>
+          </div>
           <NoteFields v={v} set={setV} side={t.side} />
           <div className="row" style={{ gap: 8 }}>
             <button className="btn primary" disabled={busy} onClick={save}>儲存</button>

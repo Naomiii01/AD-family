@@ -537,6 +537,11 @@ const F: Record<string, (a: any) => any> = {
     if (jar !== "none") log(p_member, jar, amt, `${p_side === "buy" ? "買股票" : "賣股票"} ${sym}${name ? " " + name : ""} ${p_shares} 股`, curMonth(), "stock");
     return { id: row.id, amount: amt, left: bal(p_member, jar), jar_name: jarNm(p_member, jar) };
   },
+  set_trade_broker: ({ p_id, p_broker }) => {
+    const t = db.stock_trades.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆交易");
+    t.broker = p_broker || "";
+    return null;
+  },
   set_trade_note: ({ p_id, p_style, p_reason, p_stop, p_take, p_target }) => {
     const t = db.stock_trades.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆交易");
     Object.assign(t, { style: p_style || "", reason: p_reason || "", stop_loss: p_stop || null, take_profit: p_take || null, target: p_target || null });

@@ -525,3 +525,4 @@ button.jar-row{cursor:pointer}
 .hold-row .r{display:grid;justify-items:end;white-space:nowrap}
 .hold-row .r small{font-size:.72rem;font-weight:700}
 .btn.xc-link{display:flex;justify-content:space-between;width:100%;background:linear-gradient(180deg,#24314f,#1f2a44);color:#f2cf74;border-color:transparent;font-weight:800}
+.xc-acct{margin-bottom:-4px}

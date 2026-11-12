@@ -625,3 +625,7 @@ alter table stock_trades add column if not exists style text not null default ''
   add column if not exists reason text not null default '',
   add column if not exists stop_loss numeric, add column if not exists take_profit numeric, add column if not exists target numeric;
 -- set_trade_note(p_id, p_style 當沖|隔日沖|權證|波段|長期存股|其他|'', p_reason, p_stop, p_take, p_target) — security definer, _need_access.
+
+-- Broker accounts for stock trades (國泰 / 富邦…). Each broker keeps its own average cost.
+alter table stock_trades add column if not exists broker text not null default '';
+-- set_trade_broker(p_id, p_broker) — security definer, _need_access. Naomi's earlier trades were set to 國泰.

@@ -5,7 +5,10 @@ import { supabase, rpc, fn } from "@/lib/supabase";
 import { fmt, num, jarList } from "@/lib/util";
 
 export type Trade = { id: string; traded_on: string; symbol: string; name: string; side: "buy" | "sell"; shares: number; price: number; fee: number; tax: number; jar: string; created_at: string; cost_known?: boolean;
-  style?: string; reason?: string; stop_loss?: number | null; take_profit?: number | null; target?: number | null };
+  broker?: string; style?: string; reason?: string; stop_loss?: number | null; take_profit?: number | null; target?: number | null };
+export const BROKERS = ["國泰", "富邦"];
+/** Brokers to offer: the usual two plus any used before. */
+export const brokersOf = (trades: Trade[]) => Array.from(new Set([...BROKERS, ...trades.map((t) => t.broker || "").filter(Boolean)]));
 export const STYLES = ["當沖", "隔日沖", "波段", "長期存股", "權證", "其他"];
 /** Chronological order; on the same day buys come first, so a 先賣後買 day trade is priced against that day's buy. */
 export const tradeOrder = (a: Trade, b: Trade) => a.traded_on !== b.traded_on ? (a.traded_on < b.traded_on ? -1 : 1) : a.side !== b.side ? (a.side === "buy" ? -1 : 1) : a.created_at < b.created_at ? -1 : 1;
@@ -20,10 +23,11 @@ export const taxOf = (symbol: string, shares: number, price: number) => Math.flo
 
 /** Weighted-average cost per symbol, with realized gains from every sale. */
 export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { list: Holding[]; realized: number } {
-  const by: Record<string, Holding> = {};
+  // Each broker account keeps its own average cost; the list then adds the accounts together per stock.
+  const pos: Record<string, Holding> = {};
   let realized = 0;
   for (const t of [...trades].sort(tradeOrder)) {
-    const h = (by[t.symbol] ||= { symbol: t.symbol, name: t.name, shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
+    const h = (pos[`${t.broker || ""}|${t.symbol}`] ||= { symbol: t.symbol, name: t.name, shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
     if (t.name) h.name = t.name;
     if (t.side === "buy") {
       h.cost += t.shares * Number(t.price) + t.fee;
@@ -37,12 +41,17 @@ export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { li
       h.cost -= avg * t.shares;
       h.shares -= t.shares;
     }
-    h.avg = h.shares ? h.cost / h.shares : 0;
+  }
+  const by: Record<string, Holding> = {};
+  for (const h of Object.values(pos)) {
+    const a = (by[h.symbol] ||= { symbol: h.symbol, name: "", shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
+    a.name = a.name || h.name; a.shares += h.shares; a.cost += h.cost; a.realized += h.realized;
+    if (h.costUnknown) a.costUnknown = true;
   }
   const list = Object.values(by).map((h) => {
     const p = prices[h.symbol];
     const price = p?.price != null ? Number(p.price) : null;
-    return { ...h, name: h.name || p?.name || "", price, value: price != null ? price * h.shares : null };
+    return { ...h, avg: h.shares ? h.cost / h.shares : 0, name: h.name || p?.name || "", price, value: price != null ? price * h.shares : null };
   });
   return { list, realized };
 }
@@ -56,7 +65,7 @@ export function useStocks(memberId: string, bump?: unknown) {
     setPrices(Object.fromEntries(((data as Price[]) || []).map((p) => [p.symbol, p])));
   }, []);
   const load = useCallback(async () => {
-    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known,style,reason,stop_loss,take_profit,target")
+    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known,broker,style,reason,stop_loss,take_profit,target")
       .eq("member_id", memberId).eq("voided", false).order("traded_on", { ascending: true });
     setTrades((data as Trade[]) || []);
     await loadPrices();
@@ -221,7 +230,7 @@ export function StockCard({ app }: { app: App }) {
   );
 }
 
-export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; st: ReturnType<typeof useStocks>; holdings: Holding[]; onClose: () => void; withNote?: boolean }) {
+export function TradeForm({ app, st, holdings, onClose, withNote, defaultBroker }: { app: App; st: ReturnType<typeof useStocks>; holdings: Holding[]; onClose: () => void; withNote?: boolean; defaultBroker?: string }) {
   const { sel, toast, data } = app;
   const real = jarList(sel).filter((j) => j.key !== "dream");
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -236,6 +245,9 @@ export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; 
   const [busy, setBusy] = useState(false);
   const [looking, setLooking] = useState(false);
   const [note, setNote] = useState<NoteVals>(blankNote);
+  const [broker, setBroker] = useState(() => { if (defaultBroker) return defaultBroker; try { return localStorage.getItem(`adf-broker-${sel.id}`) || BROKERS[0]; } catch { return BROKERS[0]; } });
+  // Selling is checked against what this broker account holds.
+  holdings = useMemo(() => holdingsOf(st.trades.filter((x) => (x.broker || "") === broker), st.prices).list, [st.trades, st.prices, broker]);
 
   const S = sym.trim().toUpperCase();
   const n = Math.max(0, Math.round(+shares) || 0);
@@ -282,6 +294,7 @@ export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; 
     });
     if (!e && unknown) await rpc("mark_cost_unknown", { p_id: r.id });
     if (!e && withNote && hasNote(note)) await saveNote(r.id, note);
+    if (!e) { await rpc("set_trade_broker", { p_id: r.id, p_broker: broker }); try { localStorage.setItem(`adf-broker-${sel.id}`, broker); } catch { /* private mode */ } }
     setBusy(false);
     if (e) return toast(e);
     toast(old ? `記好了：${name || S} ${num(n)} 股加進持股${unknown ? `，成本先用現價 ${px} 計算` : ""}，沒有從罐子扣錢`
@@ -294,6 +307,12 @@ export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; 
 
   return (
     <div className="income-form">
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <span className="small muted">券商帳戶</span>
+        <div className="chips" role="group" aria-label="券商帳戶">
+          {brokersOf(st.trades).map((b) => <button key={b} className={`chip ${broker === b ? "on" : ""}`} onClick={() => setBroker(b)}>{b}</button>)}
+        </div>
+      </div>
       <div className="seg" role="group" aria-label="買進或賣出">
         <button className={side === "buy" ? "on" : ""} onClick={() => setSide("buy")}>買進</button>
         <button className={side === "sell" ? "on" : ""} onClick={() => { setSide("sell"); if (jar === "none") setJar(data.bal.long > 0 ? "long" : "free"); }}>賣出</button>
@@ -323,7 +342,7 @@ export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; 
       <p className="note">手續費預設 0.1425%，有券商折扣的話照對帳單改。{side === "sell" ? "證交稅：股票 0.3%、ETF 0.1%。" : ""}</p>
       {notHeld && (
         <div className="banner warn">
-          <span>App 裡還沒有 {name || S} 的持股，所以不能記賣出。如果是開始用 App 之前就買的，先補記一筆「以前買的持股」（填當初的買進價，賺賠才算得準），再回來記賣出。</span>
+          <span>{broker}帳戶裡還沒有 {name || S} 的持股，所以不能記賣出（如果是另一個券商的，上面切換帳戶）。如果是開始用 App 之前就買的，先補記一筆「以前買的持股」（填當初的買進價，賺賠才算得準），再回來記賣出。</span>
           <div><button className="btn sm primary" onClick={asOld}>補記以前買的 {name || S}</button></div>
         </div>
       )}
