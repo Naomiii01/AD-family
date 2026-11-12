@@ -11,13 +11,13 @@ export const MEMBER_COLS = "*";
 const KEY = "adf-family-v1"; // stable: changing this key wipes real records on every device
 
 type Row = Record<string, any>;
-type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; events: Row[]; cat_budgets: Row[]; accounts: Row[]; account_log: Row[]; seq: number; uid: string | null };
+type DB = { families: Row[]; members: Row[]; ledger: Row[]; months: Row[]; expenses: Row[]; goals: Row[]; year_plans: Row[]; agreements: Row[]; checkins: Row[]; penalties: Row[]; advances: Row[]; incomes: Row[]; long_values: Row[]; stock_trades: Row[]; stock_transfers: Row[]; stock_prices: Row[]; pending_tx: Row[]; pending_rules: Row[]; events: Row[]; cat_budgets: Row[]; accounts: Row[]; account_log: Row[]; seq: number; uid: string | null };
 
 let db: DB = blank();
 const listeners: ((e: string, s: any) => void)[] = [];
 
 function blank(): DB {
-  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_prices: [], pending_tx: [], pending_rules: [], events: [], cat_budgets: [], accounts: [], account_log: [], seq: 1, uid: null };
+  return { families: [], members: [], ledger: [], months: [], expenses: [], goals: [], year_plans: [], agreements: [], checkins: [], penalties: [], advances: [], incomes: [], long_values: [], stock_trades: [], stock_transfers: [], stock_prices: [], pending_tx: [], pending_rules: [], events: [], cat_budgets: [], accounts: [], account_log: [], seq: 1, uid: null };
 }
 function load(): DB {
   try {
@@ -537,6 +537,12 @@ const F: Record<string, (a: any) => any> = {
     if (jar !== "none") log(p_member, jar, amt, `${p_side === "buy" ? "買股票" : "賣股票"} ${sym}${name ? " " + name : ""} ${p_shares} 股`, curMonth(), "stock");
     return { id: row.id, amount: amt, left: bal(p_member, jar), jar_name: jarNm(p_member, jar) };
   },
+  add_stock_transfer: ({ p_member, p_date, p_symbol, p_shares, p_from, p_to, p_note }) => {
+    const row = { id: id(), family_id: mem(p_member).family_id, member_id: p_member, moved_on: p_date, symbol: p_symbol, name: (db.stock_trades.find((t) => t.symbol === p_symbol) || {}).name || "", shares: p_shares, from_broker: p_from, to_broker: p_to, note: p_note || "", voided: false, created_at: new Date().toISOString() };
+    db.stock_transfers.push(row);
+    return { id: row.id };
+  },
+  void_stock_transfer: ({ p_id }) => { const m = db.stock_transfers.find((x) => x.id === p_id) || fail("找不到這筆轉股"); m.voided = true; return null; },
   set_trade_broker: ({ p_id, p_broker }) => {
     const t = db.stock_trades.find((x) => x.id === p_id && !x.voided) || fail("找不到這筆交易");
     t.broker = p_broker || "";

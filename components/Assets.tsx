@@ -25,7 +25,7 @@ export function useAccounts(memberId: string) {
 export function useNetWorth(memberId: string, bump?: unknown) {
   const acc = useAccounts(memberId);
   const st = useStocks(memberId, bump);
-  const stocks = stockSummary(holdingsOf(st.trades, st.prices));
+  const stocks = stockSummary(holdingsOf(st.trades, st.prices, st.moves));
   const assets = acc.list.filter((a) => a.balance > 0).reduce((s, a) => s + a.balance, 0) + stocks.value;
   const debt = -acc.list.filter((a) => a.balance < 0).reduce((s, a) => s + a.balance, 0);
   return { acc, stocks, assets, debt, net: assets - debt };

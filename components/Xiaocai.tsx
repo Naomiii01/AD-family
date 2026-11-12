@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { App } from "./Shell";
 import { rpc } from "@/lib/supabase";
 import { fmt, num } from "@/lib/util";
-import { useStocks, holdingsOf, tradeOrder, TradeForm, NoteFields, noteOf, saveNote, STYLES, brokersOf, type Trade, type NoteVals } from "./Stocks";
+import { useStocks, holdingsOf, replay, tradeOrder, TradeForm, NoteFields, noteOf, saveNote, STYLES, brokersOf, type Trade, type NoteVals, type Move, type Holding } from "./Stocks";
 
 // 小財怪投資成長紀錄: every trade with its type, reason and planned prices, and how the gains add up over time.
 // Taiwan convention on this page: up / gain is red, down / loss is green.
@@ -15,24 +15,20 @@ const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmt(Math.abs
 const pctTxt = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 const md = (d: string) => `${+d.slice(5, 7)}/${+d.slice(8)}`;
 
-/** Realized gain of every sell (average-cost method, fees and tax included) and the running total by day. */
-function pnlOf(trades: Trade[]) {
-  const pos: Record<string, { sh: number; cost: number }> = {};
+/** Realized gain of every sell (each broker account at its own average cost, transfers included) and the running total by day. */
+function pnlOf(all: Trade[], moves: Move[], shown: Trade[]) {
+  const r = replay(all, moves);
   const by: Record<string, Pnl> = {};
   const daily: Record<string, number> = {};
-  for (const t of [...trades].sort(tradeOrder)) {
-    const p = (pos[`${t.broker || ""}|${t.symbol}`] ||= { sh: 0, cost: 0 });
-    if (t.side === "buy") { p.cost += t.shares * Number(t.price) + t.fee; p.sh += t.shares; continue; }
-    const avg = p.sh ? p.cost / p.sh : 0;
-    const base = avg * t.shares;
-    const gain = t.shares * Number(t.price) - t.fee - t.tax - base;
-    by[t.id] = { gain, pct: base > 0 ? (gain / base) * 100 : 0 };
-    daily[t.traded_on] = (daily[t.traded_on] || 0) + gain;
-    p.cost -= base; p.sh -= t.shares;
+  for (const t of shown) {
+    const p = r.sells[t.id];
+    if (!p) continue;
+    by[t.id] = p;
+    daily[t.traded_on] = (daily[t.traded_on] || 0) + p.gain;
   }
   let run = 0;
   const curve = Object.keys(daily).sort().map((d) => ({ d, v: (run += daily[d]) }));
-  return { by, curve };
+  return { by, curve, moveAvg: r.moveAvg };
 }
 
 export default function Xiaocai({ app }: { app: App }) {
@@ -41,9 +37,12 @@ export default function Xiaocai({ app }: { app: App }) {
   const [acct, setAcct] = useState("全部");
   // Everything below follows the chosen broker account.
   const trades = useMemo(() => (acct === "全部" ? st.trades : st.trades.filter((t) => (t.broker || "") === acct)), [st.trades, acct]);
-  const h = useMemo(() => holdingsOf(trades, st.prices), [trades, st.prices]);
-  const { by, curve } = useMemo(() => pnlOf(trades), [trades]);
+  const b = acct === "全部" ? undefined : acct;
+  const h = useMemo(() => holdingsOf(st.trades, st.prices, st.moves, b), [st.trades, st.prices, st.moves, b]);
+  const { by, curve, moveAvg } = useMemo(() => pnlOf(st.trades, st.moves, trades), [st.trades, st.moves, trades]);
+  const moves = st.moves.filter((m) => !b || m.from_broker === b || m.to_broker === b);
   const brokers = brokersOf(st.trades);
+  const [xfer, setXfer] = useState(false);
   const [filter, setFilter] = useState("全部");
   const [open, setOpen] = useState<string | null>(null);
   const [form, setForm] = useState(false);
@@ -85,11 +84,15 @@ export default function Xiaocai({ app }: { app: App }) {
   }).filter(Boolean) as { x: (typeof held)[number]; p: number; stop: number; take: number; target: number; hit: string[] | null }[], [held, trades]);
 
   const shown = [...trades].sort(tradeOrder).reverse().filter((t) => filter === "全部" || (filter === "未分類" ? !t.style : t.style === filter));
-  const groups: [string, Trade[]][] = [];
-  for (const t of shown) {
-    const k = `${t.traded_on.slice(0, 4)} 年 ${+t.traded_on.slice(5, 7)} 月`;
+  // 轉股 sit in the timeline too (only when no type filter is on).
+  type Item = { d: string; t?: Trade; m?: Move };
+  const items: Item[] = [...shown.map((t) => ({ d: t.traded_on, t })), ...(filter === "全部" ? moves.map((m) => ({ d: m.moved_on, m })) : [])]
+    .sort((a, b) => (a.d === b.d ? 0 : a.d < b.d ? 1 : -1));
+  const groups: [string, Item[]][] = [];
+  for (const it of items) {
+    const k = `${it.d.slice(0, 4)} 年 ${+it.d.slice(5, 7)} 月`;
     if (!groups.length || groups[groups.length - 1][0] !== k) groups.push([k, []]);
-    groups[groups.length - 1][1].push(t);
+    groups[groups.length - 1][1].push(it);
   }
   const usedStyles = ["全部", ...STYLES.filter((k) => trades.some((t) => t.style === k)), ...(trades.some((t) => !t.style) ? ["未分類"] : [])];
 
@@ -112,7 +115,11 @@ export default function Xiaocai({ app }: { app: App }) {
         </div>
       </section>
 
-      <button className="btn primary big xc-add" onClick={() => setForm(!form)}>{form ? "收起" : "＋ 記一筆交易"}</button>
+      <div className="xc-actions">
+        <button className="btn primary big xc-add" onClick={() => { setForm(!form); setXfer(false); }}>{form ? "收起" : "＋ 記一筆交易"}</button>
+        {brokers.length > 1 && <button className="btn big xc-xfer" onClick={() => { setXfer(!xfer); setForm(false); }}>{xfer ? "收起" : "⇄ 轉股"}</button>}
+      </div>
+      {xfer && <XferForm app={app} st={st} brokers={brokers} from0={b} onDone={async () => { setXfer(false); await st.reload(); }} />}
       {form && (
         <section className="card">
           <h3>記一筆交易</h3>
@@ -161,14 +168,23 @@ export default function Xiaocai({ app }: { app: App }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h3>進出紀錄</h3><span className="note">{shown.length} 筆</span></div>
+        <div className="card-h"><h3>進出紀錄</h3><span className="note">{items.length} 筆</span></div>
         <div className="chips" role="group" aria-label="篩選類型">
           {usedStyles.map((k) => <button key={k} className={`chip ${filter === k ? "on" : ""}`} onClick={() => setFilter(k)}>{k}</button>)}
         </div>
-        {!st.loaded ? <div className="empty">讀取中…</div> : !shown.length ? <div className="empty">還沒有交易紀錄</div> : groups.map(([g, list]) => (
+        {!st.loaded ? <div className="empty">讀取中…</div> : !items.length ? <div className="empty">還沒有交易紀錄</div> : groups.map(([g, list]) => (
           <div key={g} className="xc-group">
             <div className="xc-month">{g}</div>
-            {list.map((t) => (
+            {list.map(({ t, m }) => m ? (
+              <MoveRow key={m.id} m={m} avg={moveAvg[m.id]} open={open === m.id} onToggle={() => setOpen(open === m.id ? null : m.id)}
+                onDelete={async () => {
+                  const [, e] = await rpc("void_stock_transfer", { p_id: m.id });
+                  if (e) return toast(e);
+                  toast("轉股紀錄刪掉了");
+                  setOpen(null);
+                  await st.reload();
+                }} />
+            ) : t && (
               <TradeRow key={t.id} t={t} brokers={brokers} showBroker={acct === "全部"} pnl={by[t.id]} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)}
                 onSaved={async () => { setOpen(null); await st.reload(); }}
                 onDelete={async () => {
@@ -182,8 +198,82 @@ export default function Xiaocai({ app }: { app: App }) {
           </div>
         ))}
       </section>
-      <p className="note center">這頁和「罐子 → 股票帳」用同一份交易紀錄；在任一邊記，兩邊都會看到。紅色是賺、綠色是賠（台股習慣）。</p>
+      <p className="note center">這頁和「罐子 → 股票帳」用同一份交易紀錄。轉股是把股票連同均價搬到另一個券商帳戶，不算賣出，也不動罐子的錢。紅色是賺、綠色是賠（台股習慣）。</p>
     </div>
+  );
+}
+
+function MoveRow({ m, avg, open, onToggle, onDelete }: { m: Move; avg?: number; open: boolean; onToggle: () => void; onDelete: () => void }) {
+  const [sure, setSure] = useState(false);
+  return (
+    <div className={`xc-row ${open ? "open" : ""}`}>
+      <button className="xc-row-main" onClick={() => { setSure(false); onToggle(); }} aria-expanded={open}>
+        <span className="xc-date">{md(m.moved_on)}</span>
+        <span className="xc-side move">轉</span>
+        <span className="xc-mid">
+          <span className="xc-name"><b>{m.name || m.symbol}</b> <span className="note">{m.symbol}</span></span>
+          <span className="note">{m.from_broker} → {m.to_broker} · {num(m.shares)} 股{avg ? ` · 均價 ${avg.toFixed(2)}` : ""}</span>
+          {m.note && <span className="xc-reason">{m.note}</span>}
+        </span>
+        <span className="xc-right"><small className="muted">不算賣出</small></span>
+      </button>
+      {open && (
+        <div className="xc-edit">
+          <div className="row" style={{ gap: 8 }}>
+            {sure ? <button className="btn danger" onClick={onDelete}>確定刪除這筆轉股</button> : <button className="btn ghost" onClick={() => setSure(true)}>刪除轉股紀錄</button>}
+            <button className="btn" onClick={onToggle}>取消</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 轉股: pick the stock in one broker account and move some or all of it to the other. */
+function XferForm({ app, st, brokers, from0, onDone }: { app: App; st: ReturnType<typeof useStocks>; brokers: string[]; from0?: string; onDone: () => void }) {
+  const { sel, toast } = app;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
+  const [from, setFrom] = useState(from0 || brokers[0]);
+  const [to, setTo] = useState(brokers.find((x) => x !== (from0 || brokers[0])) || "");
+  const [sym, setSym] = useState("");
+  const [shares, setShares] = useState("");
+  const [date, setDate] = useState(today);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const held: Holding[] = useMemo(() => holdingsOf(st.trades, st.prices, st.moves, from).list.filter((x) => x.shares > 0), [st.trades, st.prices, st.moves, from]);
+  const pick = held.find((x) => x.symbol === sym);
+  const n = Math.round(+shares) || 0;
+  async function save() {
+    setBusy(true);
+    const [, e] = await rpc("add_stock_transfer", { p_member: sel.id, p_date: date, p_symbol: sym, p_shares: n, p_from: from, p_to: to, p_note: note });
+    setBusy(false);
+    if (e) return toast(e);
+    toast(`轉好了：${pick?.name || sym} ${num(n)} 股 ${from} → ${to}`);
+    onDone();
+  }
+  return (
+    <section className="card">
+      <h3>轉股（券商帳戶之間）</h3>
+      <div className="grid2">
+        <div><div className="small muted">從</div><div className="chips">{brokers.map((x) => <button key={x} className={`chip ${from === x ? "on" : ""}`} onClick={() => { setFrom(x); setSym(""); if (to === x) setTo(brokers.find((y) => y !== x) || ""); }}>{x}</button>)}</div></div>
+        <div><div className="small muted">轉到</div><div className="chips">{brokers.filter((x) => x !== from).map((x) => <button key={x} className={`chip ${to === x ? "on" : ""}`} onClick={() => setTo(x)}>{x}</button>)}</div></div>
+      </div>
+      <div className="small muted">{from}帳戶裡的股票</div>
+      {held.length ? (
+        <div className="chips">{held.map((x) => <button key={x.symbol} className={`chip ${sym === x.symbol ? "on" : ""}`} onClick={() => { setSym(x.symbol); setShares(String(x.shares)); }}>{x.name || x.symbol} · {num(x.shares)} 股</button>)}</div>
+      ) : <p className="note">{from}帳戶裡目前沒有股票。</p>}
+      {pick && (
+        <>
+          <div className="grid2">
+            <label className="f">轉幾股<input type="number" inputMode="numeric" min={1} max={pick.shares} value={shares} onChange={(e) => setShares(e.target.value)} /></label>
+            <label className="f">轉股日<input type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          </div>
+          <label className="f">備註（可不填）<input maxLength={100} value={note} placeholder="例如：轉去富邦做波段" onChange={(e) => setNote(e.target.value)} /></label>
+          <p className="note">會用 {from} 的均價 {pick.avg.toFixed(2)} 帶過去，不算賣出、沒有損益，也不動罐子的錢。</p>
+        </>
+      )}
+      <button className="btn primary" disabled={busy || !pick || !to || n <= 0 || n > (pick?.shares || 0)} onClick={save}>轉過去</button>
+    </section>
   );
 }
 

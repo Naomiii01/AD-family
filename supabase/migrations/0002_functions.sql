@@ -629,3 +629,9 @@ alter table stock_trades add column if not exists style text not null default ''
 -- Broker accounts for stock trades (國泰 / 富邦…). Each broker keeps its own average cost.
 alter table stock_trades add column if not exists broker text not null default '';
 -- set_trade_broker(p_id, p_broker) — security definer, _need_access. Naomi's earlier trades were set to 國泰.
+
+-- 轉股 between broker accounts: table stock_transfers (moved_on, symbol, shares, from_broker, to_broker, note, voided),
+-- RLS select can_access(member_id). _broker_held(member, symbol, broker) counts trades + transfers per account.
+-- add_stock_transfer(p_member, p_date, p_symbol, p_shares, p_from, p_to, p_note) checks the source account holds enough;
+-- void_stock_transfer(p_id) refuses if the moved shares were already sold in the destination. No jar money moves;
+-- the app carries the source account's average cost across.

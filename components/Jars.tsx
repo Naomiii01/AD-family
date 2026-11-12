@@ -123,7 +123,7 @@ function AdultJars({ app }: { app: App }) {
   const cur = data.months.find((x) => x.month === curMonth());
   const active = cur?.status === "active";
   const st = useStocks(sel.id, data.recent?.[0]?.created_at);
-  const stocks = stockSummary(holdingsOf(st.trades, st.prices));
+  const stocks = stockSummary(holdingsOf(st.trades, st.prices, st.moves));
   const [dreamForm, setDreamForm] = useState(false);
   const [log, setLog] = useState(false);
   const jars = jarList(sel);

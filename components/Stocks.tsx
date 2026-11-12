@@ -22,31 +22,52 @@ export const feeOf = (shares: number, price: number) => (shares > 0 && price > 0
 export const taxOf = (symbol: string, shares: number, price: number) => Math.floor(shares * price * (/^00/.test(symbol) ? 0.001 : 0.003));
 
 /** Weighted-average cost per symbol, with realized gains from every sale. */
-export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { list: Holding[]; realized: number } {
-  // Each broker account keeps its own average cost; the list then adds the accounts together per stock.
-  const pos: Record<string, Holding> = {};
-  let realized = 0;
-  for (const t of [...trades].sort(tradeOrder)) {
-    const h = (pos[`${t.broker || ""}|${t.symbol}`] ||= { symbol: t.symbol, name: t.name, shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
-    if (t.name) h.name = t.name;
-    if (t.side === "buy") {
-      h.cost += t.shares * Number(t.price) + t.fee;
-      h.shares += t.shares;
-      if (t.cost_known === false) h.costUnknown = true;
-    } else {
-      const avg = h.shares ? h.cost / h.shares : 0;
-      const gain = t.shares * Number(t.price) - t.fee - t.tax - avg * t.shares;
-      h.realized += gain;
-      realized += gain;
-      h.cost -= avg * t.shares;
-      h.shares -= t.shares;
+export type Move = { id: string; moved_on: string; symbol: string; name: string; shares: number; from_broker: string; to_broker: string; note: string; created_at: string };
+type Pos = { symbol: string; name: string; broker: string; shares: number; cost: number; costUnknown?: boolean };
+
+/**
+ * Replays trades and 轉股 in date order. Each broker account keeps its own average cost; a transfer carries
+ * the shares to the other account at that average (not a sale). Same day: buys, then transfers, then sells.
+ */
+export function replay(trades: Trade[], moves: Move[] = []) {
+  const ev: { d: string; o: number; c: string; t?: Trade; m?: Move }[] = [
+    ...trades.map((t) => ({ d: t.traded_on, o: t.side === "buy" ? 0 : 2, c: t.created_at, t })),
+    ...moves.map((m) => ({ d: m.moved_on, o: 1, c: m.created_at, m })),
+  ].sort((a, b) => (a.d !== b.d ? (a.d < b.d ? -1 : 1) : a.o !== b.o ? a.o - b.o : a.c < b.c ? -1 : 1));
+  const pos: Record<string, Pos> = {};
+  const at = (broker: string, symbol: string, name = "") => (pos[`${broker}|${symbol}`] ||= { symbol, name, broker, shares: 0, cost: 0 });
+  const sells: Record<string, { gain: number; pct: number }> = {};
+  const moveAvg: Record<string, number> = {};
+  for (const e of ev) {
+    if (e.t) {
+      const t = e.t, p = at(t.broker || "", t.symbol, t.name);
+      if (t.name) p.name = t.name;
+      if (t.side === "buy") { p.cost += t.shares * Number(t.price) + t.fee; p.shares += t.shares; if (t.cost_known === false) p.costUnknown = true; continue; }
+      const avg = p.shares ? p.cost / p.shares : 0, base = avg * t.shares;
+      const gain = t.shares * Number(t.price) - t.fee - t.tax - base;
+      sells[t.id] = { gain, pct: base > 0 ? (gain / base) * 100 : 0 };
+      p.cost -= base; p.shares -= t.shares;
+    } else if (e.m) {
+      const m = e.m, a = at(m.from_broker, m.symbol, m.name), b = at(m.to_broker, m.symbol, m.name);
+      const avg = a.shares ? a.cost / a.shares : 0, n = Math.min(m.shares, Math.max(0, a.shares));
+      moveAvg[m.id] = avg;
+      a.cost -= avg * n; a.shares -= n; b.cost += avg * n; b.shares += n;
+      if (a.costUnknown) b.costUnknown = true;
+      if (!b.name) b.name = a.name;
     }
   }
+  return { pos, sells, moveAvg };
+}
+
+export function holdingsOf(trades: Trade[], prices: Record<string, Price>, moves: Move[] = [], broker?: string): { list: Holding[]; realized: number } {
+  const r = replay(trades, moves);
+  const realized = trades.filter((t) => r.sells[t.id] && (broker == null || (t.broker || "") === broker)).reduce((s, t) => s + r.sells[t.id].gain, 0);
   const by: Record<string, Holding> = {};
-  for (const h of Object.values(pos)) {
-    const a = (by[h.symbol] ||= { symbol: h.symbol, name: "", shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
-    a.name = a.name || h.name; a.shares += h.shares; a.cost += h.cost; a.realized += h.realized;
-    if (h.costUnknown) a.costUnknown = true;
+  for (const p of Object.values(r.pos)) {
+    if (broker != null && p.broker !== broker) continue;
+    const a = (by[p.symbol] ||= { symbol: p.symbol, name: "", shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
+    a.name = a.name || p.name; a.shares += p.shares; a.cost += p.cost;
+    if (p.costUnknown) a.costUnknown = true;
   }
   const list = Object.values(by).map((h) => {
     const p = prices[h.symbol];
@@ -58,6 +79,7 @@ export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { li
 
 export function useStocks(memberId: string, bump?: unknown) {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [moves, setMoves] = useState<Move[]>([]);
   const [prices, setPrices] = useState<Record<string, Price>>({});
   const [loaded, setLoaded] = useState(false);
   const loadPrices = useCallback(async () => {
@@ -68,6 +90,9 @@ export function useStocks(memberId: string, bump?: unknown) {
     const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known,broker,style,reason,stop_loss,take_profit,target")
       .eq("member_id", memberId).eq("voided", false).order("traded_on", { ascending: true });
     setTrades((data as Trade[]) || []);
+    const { data: mv } = await supabase.from("stock_transfers").select("id,moved_on,symbol,name,shares,from_broker,to_broker,note,created_at")
+      .eq("member_id", memberId).eq("voided", false).order("moved_on", { ascending: true });
+    setMoves((mv as Move[]) || []);
     await loadPrices();
     setLoaded(true);
   }, [memberId, loadPrices, bump]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -79,7 +104,7 @@ export function useStocks(memberId: string, bump?: unknown) {
     await loadPrices();
     return e;
   }, [loadPrices]);
-  return { trades, prices, loaded, reload: load, refresh };
+  return { trades, moves, prices, loaded, reload: load, refresh };
 }
 
 const pctTxt = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -97,7 +122,7 @@ export function stockSummary(h: ReturnType<typeof holdingsOf>) {
 export function StockCard({ app }: { app: App }) {
   const { sel, toast, data } = app;
   const st = useStocks(sel.id);
-  const h = useMemo(() => holdingsOf(st.trades, st.prices), [st.trades, st.prices]);
+  const h = useMemo(() => holdingsOf(st.trades, st.prices, st.moves), [st.trades, st.prices, st.moves]);
   const sum = stockSummary(h);
   const [form, setForm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -247,7 +272,7 @@ export function TradeForm({ app, st, holdings, onClose, withNote, defaultBroker 
   const [note, setNote] = useState<NoteVals>(blankNote);
   const [broker, setBroker] = useState(() => { if (defaultBroker) return defaultBroker; try { return localStorage.getItem(`adf-broker-${sel.id}`) || BROKERS[0]; } catch { return BROKERS[0]; } });
   // Selling is checked against what this broker account holds.
-  holdings = useMemo(() => holdingsOf(st.trades.filter((x) => (x.broker || "") === broker), st.prices).list, [st.trades, st.prices, broker]);
+  holdings = useMemo(() => holdingsOf(st.trades, st.prices, st.moves, broker).list, [st.trades, st.prices, st.moves, broker]);
 
   const S = sym.trim().toUpperCase();
   const n = Math.max(0, Math.round(+shares) || 0);
