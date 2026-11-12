@@ -4,7 +4,11 @@ import type { App } from "./Shell";
 import { supabase, rpc, fn } from "@/lib/supabase";
 import { fmt, num, jarList } from "@/lib/util";
 
-type Trade = { id: string; traded_on: string; symbol: string; name: string; side: "buy" | "sell"; shares: number; price: number; fee: number; tax: number; jar: string; created_at: string; cost_known?: boolean };
+export type Trade = { id: string; traded_on: string; symbol: string; name: string; side: "buy" | "sell"; shares: number; price: number; fee: number; tax: number; jar: string; created_at: string; cost_known?: boolean;
+  style?: string; reason?: string; stop_loss?: number | null; take_profit?: number | null; target?: number | null };
+export const STYLES = ["當沖", "隔日沖", "波段", "長期存股", "權證", "其他"];
+/** Chronological order; on the same day buys come first, so a 先賣後買 day trade is priced against that day's buy. */
+export const tradeOrder = (a: Trade, b: Trade) => a.traded_on !== b.traded_on ? (a.traded_on < b.traded_on ? -1 : 1) : a.side !== b.side ? (a.side === "buy" ? -1 : 1) : a.created_at < b.created_at ? -1 : 1;
 type Price = { symbol: string; name: string; price: number | null; price_date: string | null; updated_at: string };
 export type Holding = { symbol: string; name: string; shares: number; cost: number; avg: number; realized: number; price: number | null; value: number | null; costUnknown?: boolean };
 
@@ -18,7 +22,7 @@ export const taxOf = (symbol: string, shares: number, price: number) => Math.flo
 export function holdingsOf(trades: Trade[], prices: Record<string, Price>): { list: Holding[]; realized: number } {
   const by: Record<string, Holding> = {};
   let realized = 0;
-  for (const t of [...trades].sort((a, b) => (a.traded_on + a.created_at < b.traded_on + b.created_at ? -1 : 1))) {
+  for (const t of [...trades].sort(tradeOrder)) {
     const h = (by[t.symbol] ||= { symbol: t.symbol, name: t.name, shares: 0, cost: 0, avg: 0, realized: 0, price: null, value: null });
     if (t.name) h.name = t.name;
     if (t.side === "buy") {
@@ -52,7 +56,7 @@ export function useStocks(memberId: string, bump?: unknown) {
     setPrices(Object.fromEntries(((data as Price[]) || []).map((p) => [p.symbol, p])));
   }, []);
   const load = useCallback(async () => {
-    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known")
+    const { data } = await supabase.from("stock_trades").select("id,traded_on,symbol,name,side,shares,price,fee,tax,jar,created_at,cost_known,style,reason,stop_loss,take_profit,target")
       .eq("member_id", memberId).eq("voided", false).order("traded_on", { ascending: true });
     setTrades((data as Trade[]) || []);
     await loadPrices();
@@ -119,7 +123,7 @@ export function StockCard({ app }: { app: App }) {
 
   return (
     <section className="card">
-      <div className="card-h"><h2>股票帳</h2>{sum.held.length > 0 && <button className="btn sm" disabled={refreshing} onClick={refreshNow}>{refreshing ? "更新中…" : "更新股價"}</button>}</div>
+      <div className="card-h"><h2>股票帳</h2><span className="row" style={{ gap: 6 }}>{sel.role !== "kid" && <button className="btn sm ghost" onClick={() => app.go("more", "xiaocai")}>小財怪紀錄 ›</button>}{sum.held.length > 0 && <button className="btn sm" disabled={refreshing} onClick={refreshNow}>{refreshing ? "更新中…" : "更新股價"}</button>}</span></div>
       {st.trades.length === 0 && !form && (
         <p className="small">買股票時記一筆，App 會幫你算平均成本、目前市值和賺賠。買股票的錢從你選的罐子出，不算「花費」，不會出現在月檢討的圓餅圖；賣掉的錢會回到你選的罐子。</p>
       )}
@@ -186,7 +190,7 @@ export function StockCard({ app }: { app: App }) {
   );
 }
 
-function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<typeof useStocks>; holdings: Holding[]; onClose: () => void }) {
+export function TradeForm({ app, st, holdings, onClose, withNote }: { app: App; st: ReturnType<typeof useStocks>; holdings: Holding[]; onClose: () => void; withNote?: boolean }) {
   const { sel, toast, data } = app;
   const real = jarList(sel).filter((j) => j.key !== "dream");
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -200,6 +204,7 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
   const [jar, setJar] = useState(() => (data.bal.long > 0 ? "long" : "free"));
   const [busy, setBusy] = useState(false);
   const [looking, setLooking] = useState(false);
+  const [note, setNote] = useState<NoteVals>(blankNote);
 
   const S = sym.trim().toUpperCase();
   const n = Math.max(0, Math.round(+shares) || 0);
@@ -245,6 +250,7 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
       p_member: sel.id, p_date: date, p_symbol: S, p_name: name, p_side: side, p_shares: n, p_price: px, p_fee: unknown ? 0 : f, p_tax: t, p_jar: jar,
     });
     if (!e && unknown) await rpc("mark_cost_unknown", { p_id: r.id });
+    if (!e && withNote && hasNote(note)) await saveNote(r.id, note);
     setBusy(false);
     if (e) return toast(e);
     toast(old ? `記好了：${name || S} ${num(n)} 股加進持股${unknown ? `，成本先用現價 ${px} 計算` : ""}，沒有從罐子扣錢`
@@ -299,11 +305,39 @@ function TradeForm({ app, st, holdings, onClose }: { app: App; st: ReturnType<ty
       )}
       {jar === "none" && side === "buy" && <p className="note">「以前買的」只把股票加進持股，不會從任何罐子扣錢。查得到成本價就填（分好幾次買的可以填平均價），賺賠才算得準；查不到就空著，App 會先用現在的股價當成本，之後的漲跌從今天開始算。</p>}
       {side === "buy" && jar !== "none" && n > 0 && p > 0 && total > bal(jar) && <p className="note" style={{ color: "var(--warn)" }}>這個罐子只有 {fmt(bal(jar))}，記下去會透支 {fmt(total - bal(jar))}。</p>}
+      {withNote && <NoteFields v={note} set={setNote} side={side} />}
       <div className="row" style={{ gap: 8 }}>
         <button className="btn primary" disabled={busy || !S || n <= 0 || (p <= 0 && !old) || (side === "sell" && (!held || n > held.shares))} onClick={save}>記下來</button>
         <button className="btn" onClick={onClose}>取消</button>
       </div>
       {side === "sell" && held && n > held.shares && <p className="note" style={{ color: "var(--warn)" }}>你只有 {num(held.shares)} 股。</p>}
+    </div>
+  );
+}
+
+/* ---------- 小財怪 notes on a trade ---------- */
+export type NoteVals = { style: string; reason: string; stop: string; take: string; target: string };
+export const blankNote: NoteVals = { style: "", reason: "", stop: "", take: "", target: "" };
+export const noteOf = (t: Trade): NoteVals => ({ style: t.style || "", reason: t.reason || "", stop: t.stop_loss ? String(Number(t.stop_loss)) : "", take: t.take_profit ? String(Number(t.take_profit)) : "", target: t.target ? String(Number(t.target)) : "" });
+const hasNote = (v: NoteVals) => !!(v.style || v.reason.trim() || +v.stop || +v.take || +v.target);
+export const saveNote = (id: string, v: NoteVals) =>
+  rpc("set_trade_note", { p_id: id, p_style: v.style, p_reason: v.reason.trim(), p_stop: +v.stop || 0, p_take: +v.take || 0, p_target: +v.target || 0 });
+
+export function NoteFields({ v, set, side }: { v: NoteVals; set: (v: NoteVals) => void; side: "buy" | "sell" }) {
+  return (
+    <div className="xc-note">
+      <div className="small muted">交易類型</div>
+      <div className="chips" role="group" aria-label="交易類型">
+        {STYLES.map((k) => <button key={k} className={`chip ${v.style === k ? "on" : ""}`} onClick={() => set({ ...v, style: v.style === k ? "" : k })}>{k}</button>)}
+      </div>
+      <label className="f">{side === "buy" ? "為什麼買" : "為什麼賣"}<textarea rows={2} maxLength={300} value={v.reason} placeholder={side === "buy" ? "例如：法說會轉好、站上月線、存股定期定額" : "例如：到停利、跌破停損、資金要換股"} onChange={(e) => set({ ...v, reason: e.target.value })} /></label>
+      {side === "buy" && (
+        <div className="grid3">
+          <label className="f">停損價<input type="number" inputMode="decimal" min={0} step="0.01" value={v.stop} onChange={(e) => set({ ...v, stop: e.target.value })} /></label>
+          <label className="f">停利價<input type="number" inputMode="decimal" min={0} step="0.01" value={v.take} onChange={(e) => set({ ...v, take: e.target.value })} /></label>
+          <label className="f">目標價<input type="number" inputMode="decimal" min={0} step="0.01" value={v.target} onChange={(e) => set({ ...v, target: e.target.value })} /></label>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import QuickSetup from "./QuickSetup";
 import Parent from "./Parent";
 import JarManager from "./JarManager";
 import Assets from "./Assets";
+import Xiaocai from "./Xiaocai";
 import { simpleOf } from "./QuickLog";
 import { SKINS, SkinKey, skinOf, LOOKS, LookKey, lookOf } from "@/lib/themes";
 import { gd, jarList, IS_DEMO } from "@/lib/util";
@@ -24,7 +25,8 @@ export default function More({ app }: { app: App }) {
       sub === "skin" ? <SkinPicker app={app} /> :
       sub === "jars" ? <JarManager app={app} /> :
       sub === "logset" ? <LogSettings app={app} /> :
-      sub === "assets" ? <Assets app={app} /> : null;
+      sub === "assets" ? <Assets app={app} /> :
+      sub === "xiaocai" && sel.role !== "kid" ? <Xiaocai app={app} /> : null;
     return (
       <>
         <button className="back" onClick={() => go("more")}>‹ 更多</button>
@@ -38,7 +40,8 @@ export default function More({ app }: { app: App }) {
     ["rules", "則", "long", "罐子使用原則", "三個罐子怎麼用、家庭銀行和夢想加碼"],
     ["quick", "記", "sky", "快速記帳與每週提醒" + (isSelf ? "" : `（${sel.name}）`), "Apple 捷徑、加到主畫面、行事曆提醒"],
   ];
-  if (sel.role !== "kid") items.unshift(["assets", "產", "long", "我的資產" + who, "現金、銀行、電子支付、信用卡和股票，一次看淨資產"]);
+  if (sel.role !== "kid") items.unshift(["assets", "產", "long", "我的資產" + who, "現金、銀行、電子支付、信用卡和股票，一次看淨資產"],
+    ["xiaocai", "財", "dream", "小財怪投資成長紀錄" + who, "每筆進出的類型、原因、停損停利，看自己越賺越多"]);
   items.push(["jars", "罐", "long", "管理罐子" + who, jarList(sel).map((j) => j.name).join("、")]);
   items.push(["logset", "帳", "free", "記帳設定" + who, `${simpleOf(sel) ? "簡易記帳" : "完整記帳"} · ${sel.need_want === false ? "不分需要／想要" : "需要／想要月底補標"}`]);
   items.push(["skin", "色", "accent", "畫面風格與配色" + who, `${LOOKS[lookOf(sel)].name} · ${SKINS[skinOf(sel)].name}`]);

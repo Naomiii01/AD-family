@@ -619,3 +619,9 @@ alter table public.families add column if not exists guardian text not null defa
 -- voiding gives it back. 卡費 rows are skipped: 繳卡費 settles the card and bank itself.
 alter table expenses add column if not exists account_id uuid references accounts(id);
 -- (functions _acc_norm, _acc_for, _expense_acc_sync and trigger expense_acc_sync as deployed 2026-11-10)
+
+-- 小財怪投資成長紀錄: notes on stock trades (no money moves).
+alter table stock_trades add column if not exists style text not null default '',
+  add column if not exists reason text not null default '',
+  add column if not exists stop_loss numeric, add column if not exists take_profit numeric, add column if not exists target numeric;
+-- set_trade_note(p_id, p_style 當沖|隔日沖|權證|波段|長期存股|其他|'', p_reason, p_stop, p_take, p_target) — security definer, _need_access.
