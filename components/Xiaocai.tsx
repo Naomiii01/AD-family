@@ -134,6 +134,25 @@ export default function Xiaocai({ app }: { app: App }) {
         </section>
       )}
 
+      {held.length > 0 && (
+        <section className="card">
+          <div className="card-h"><h3>目前持股</h3><span className="note">{acct === "全部" ? "兩個帳戶合併的均價" : `${acct}帳戶的均價`}</span></div>
+          <div className="hold-list">
+            {held.map((x) => {
+              const g = x.price != null ? (x.price - x.avg) * x.shares : null;
+              return (
+                <div className="hold-row" key={x.symbol}>
+                  <span className="t"><b>{x.name || x.symbol} <span className="note">{x.symbol}</span></b>
+                    <span className="note">{num(x.shares)} 股 · 均價 {x.avg.toFixed(2)}{x.price != null ? ` · 現價 ${x.price}` : ""}{x.costUnknown ? " · 成本不明" : ""}</span></span>
+                  <span className="num r">{fmt(Math.round(x.value ?? x.cost))}{g != null && <small style={{ color: tone(g) }}>{signed(Math.round(g))}（{pctTxt(x.avg ? (x.price! / x.avg - 1) * 100 : 0)}）</small>}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="note">均價含買進手續費。轉股會把均價一起帶過去，和轉入帳戶原本的持股加權平均。</p>
+        </section>
+      )}
+
       {alerts.length > 0 && (
         <section className="card">
           <h3>持股提醒</h3>
