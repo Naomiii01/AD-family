@@ -121,6 +121,37 @@ export function StockCard({ app }: { app: App }) {
   const noPrice = sum.held.some((x) => x.price == null);
   const recent = [...st.trades].reverse();
 
+  // Grown-ups: just the totals and what's held; trades live on the 小財怪 page.
+  if (sel.role !== "kid") return (
+    <section className="card">
+      <div className="card-h"><h2>股票帳</h2>{sum.held.length > 0 && <button className="btn sm ghost" disabled={refreshing} onClick={refreshNow}>{refreshing ? "更新中…" : "↻ 股價"}</button>}</div>
+      {sum.held.length > 0 ? (
+        <>
+          <div className="grid3 center">
+            <div><div className="note">投入成本</div><b className="num">{fmt(sum.cost)}</b></div>
+            <div><div className="note">目前市值</div><b className="num">{fmt(sum.value)}</b></div>
+            <div><div className="note">{sum.gain >= 0 ? "帳面賺" : "帳面賠"}</div>
+              <b className="num" style={{ color: gainColor(sum.gain) }}>{signed(sum.gain)}</b>
+              <div className="note" style={{ color: gainColor(sum.gain) }}>{sum.cost > 0 ? pctTxt((sum.gain / sum.cost) * 100) : ""}</div>
+            </div>
+          </div>
+          <div className="hold-list">
+            {sum.held.map((x) => {
+              const g = x.value != null ? x.value - x.cost : null;
+              return (
+                <div className="hold-row" key={x.symbol}>
+                  <span className="t"><b>{x.name || x.symbol}</b><span className="note">{num(x.shares)} 股{x.price != null ? ` · 現價 ${x.price}` : ""}</span></span>
+                  <span className="num r">{fmt(x.value ?? x.cost)}{g != null && <small style={{ color: gainColor(g) }}>{pctTxt(x.cost ? (g / x.cost) * 100 : 0)}</small>}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : <p className="note" style={{ textAlign: "left" }}>目前沒有持股。</p>}
+      <button className="btn xc-link" onClick={() => app.go("more", "xiaocai")}>🐾 小財怪投資成長紀錄 <span aria-hidden="true">›</span></button>
+    </section>
+  );
+
   return (
     <section className="card">
       <div className="card-h"><h2>股票帳</h2><span className="row" style={{ gap: 6 }}>{sel.role !== "kid" && <button className="btn sm ghost" onClick={() => app.go("more", "xiaocai")}>小財怪紀錄 ›</button>}{sum.held.length > 0 && <button className="btn sm" disabled={refreshing} onClick={refreshNow}>{refreshing ? "更新中…" : "更新股價"}</button>}</span></div>
