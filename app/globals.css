@@ -529,3 +529,5 @@ button.jar-row{cursor:pointer}
 .xc-actions{display:grid;grid-template-columns:1fr auto;gap:8px}
 .xc .btn.xc-xfer{background:var(--surface);color:var(--xc-navy);border:1.5px solid var(--xc-gold)}
 .xc-side.move{background:var(--xc-navy2)}
+.pend-head.as-div{cursor:default}
+.pend-pair .tag{background:color-mix(in srgb,var(--accent) 15%,var(--surface));color:var(--accent)}

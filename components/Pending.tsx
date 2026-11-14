@@ -4,6 +4,7 @@ import type { App } from "./Shell";
 import { supabase, rpc } from "@/lib/supabase";
 import { fmt, shortDate, catsFor, INCOME_CATS, jarList, spendable } from "@/lib/util";
 import { CardBill } from "./CardBill";
+import { useAccounts } from "./Assets";
 
 type Tx = { id: string; dir: "out" | "in"; amount: number; bank: string; note: string; created_at: string };
 type Rule = { bank: string; dir: string; action: string; jar: string; category: string; item: string };
@@ -35,10 +36,27 @@ export function usePending(memberId: string) {
   return { list, rules, reload };
 }
 
+/** Same matching as the database: 中信 = 中國信託, 國泰 = 國泰世華, 銀行 / 信用卡 / spaces ignored. */
+const norm = (t: string) => t.toLowerCase().replace(/\s|銀行|信用卡/g, "").replace("中信", "中國信託").replace("國泰世華", "國泰");
+
+/** A transfer out of one bank and a deposit of the same amount into another within a day: moving her own money. */
+function pairsOf(list: Tx[], skip: Set<string>) {
+  const used = new Set<string>(), pairs: [Tx, Tx][] = [];
+  for (const o of list) {
+    if (o.dir !== "out" || !o.amount || used.has(o.id)) continue;
+    const i = list.find((x) => x.dir === "in" && x.amount === o.amount && !used.has(x.id) && norm(x.bank) !== norm(o.bank)
+      && Math.abs(Date.parse(x.created_at) - Date.parse(o.created_at)) < 864e5 && !skip.has(`${o.id}|${x.id}`));
+    if (i) { used.add(o.id); used.add(i.id); pairs.push([o, i]); }
+  }
+  return { pairs, used };
+}
+
 export function PendingCard({ app }: { app: App }) {
   const { sel } = app;
   const p = usePending(sel.id);
   const [open, setOpen] = useState<string | null>(null);
+  const [skip, setSkip] = useState<Set<string>>(new Set());
+  const { pairs, used } = pairsOf(p.list, skip);
   const me = useId();
   const [first, setFirst] = useState(false);
   useEffect(() => {
@@ -54,12 +72,52 @@ export function PendingCard({ app }: { app: App }) {
       <div className="card-h"><h3>待確認 {p.list.length} 筆</h3><span className="small muted">從銀行通知抓到的</span></div>
       <p className="note">轉帳和入帳的通知沒寫錢去哪、從哪來，請告訴 App 這筆要怎麼記。選過的方式會記住，下次同一家銀行會先幫你選好。</p>
       <div className="list">
-        {p.list.map((t) => (
+        {pairs.map(([o, i]) => (
+          <PairRow key={o.id + i.id} app={app} out={o} inn={i} onDone={() => p.reload()} onNo={() => setSkip(new Set([...skip, `${o.id}|${i.id}`]))} />
+        ))}
+        {p.list.filter((t) => !used.has(t.id)).map((t) => (
           <PendingRow key={t.id} app={app} tx={t} rule={p.rules.find((r) => r.bank === t.bank && r.dir === t.dir)}
             open={open === t.id} onOpen={() => setOpen(open === t.id ? null : t.id)} onDone={() => { setOpen(null); p.reload(); }} />
         ))}
       </div>
     </section>
+  );
+}
+
+/** One tap for 「從國泰轉到中信」: closes both notices (no jar money moves) and moves the money in 我的資產. */
+function PairRow({ app, out, inn, onDone, onNo }: { app: App; out: Tx; inn: Tx; onDone: () => void; onNo: () => void }) {
+  const { sel, toast } = app;
+  const acc = useAccounts(sel.id);
+  const [busy, setBusy] = useState(false);
+  const find = (bank: string) => acc.list.find((a) => a.kind !== "card" && (norm(a.name).includes(norm(bank)) || norm(bank).includes(norm(a.name))));
+  const from = find(out.bank), to = find(inn.bank);
+  async function yes() {
+    setBusy(true);
+    for (const t of [out, inn]) {
+      const [, e] = await rpc("resolve_pending_v2", { p_id: t.id, p_action: "ignore", p_jar: "free", p_item: "", p_category: "", p_remember: false, p_amount: null });
+      if (e) { setBusy(false); return toast(e); }
+    }
+    if (from && to) {
+      const [, e] = await rpc("transfer_account", { p_from: from.id, p_to: to.id, p_amount: out.amount, p_note: `${out.bank}→${inn.bank}` });
+      if (e) toast(`通知關掉了，但資產沒更新：${e}`);
+    }
+    setBusy(false);
+    toast(from && to ? `記成互轉：${from.name} → ${to.name} ${fmt(out.amount)}` : "兩筆都關掉了（自己帳戶互轉不用記）");
+    onDone();
+  }
+  return (
+    <div className="pend-row pend-pair">
+      <div className="pend-head as-div">
+        <span className="tag">互轉</span>
+        <span className="t">{out.bank} → {inn.bank}<br /><span className="d">{shortDate(out.created_at)} · 轉出和入帳金額一樣</span></span>
+        <b className="num">{fmt(out.amount)}</b>
+      </div>
+      <p className="note">看起來是把自己的錢從{out.bank}搬到{inn.bank}，不是花掉也不是收入，罐子不用動。{from && to ? `我的資產會從「${from.name}」轉到「${to.name}」。` : ""}</p>
+      <div className="pend-quick">
+        <button className="btn sm primary" disabled={busy} onClick={yes}>是，自己帳戶互轉</button>
+        <button className="btn sm ghost" disabled={busy} onClick={onNo}>不是，分開記</button>
+      </div>
+    </div>
   );
 }
 
